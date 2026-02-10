@@ -1,0 +1,11 @@
+# Dependencias de Node (¡Muy importante!)
+node_modules/
+
+# Archivos de sistema y logs
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Variables de entorno (claves secretas)
+.env

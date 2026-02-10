@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Chat Local</title>
+    <style>
+        /* Estilos estilo Discord oscuro */
+        body { display: flex; height: 100vh; margin: 0; font-family: sans-serif; background: #36393f; color: white; }
+        
+        /* Barra lateral de salas */
+        #sidebar { width: 200px; background: #2f3136; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .btn-sala { background: #40444b; border: none; color: #dcddde; padding: 10px; cursor: pointer; text-align: left; border-radius: 5px; }
+        .btn-sala:hover, .activa { background: #7289da; color: white; }
+
+        /* Área de chat */
+        #chat-area { flex: 1; display: flex; flex-direction: column; padding: 20px; }
+        #mensajes { flex: 1; overflow-y: auto; margin-bottom: 20px; background: #36393f; }
+        .mensaje { margin-bottom: 10px; padding: 5px; border-bottom: 1px solid #40444b; }
+        .autor { font-weight: bold; color: #7289da; margin-right: 10px; }
+
+        /* Input */
+        #form-mensaje { display: flex; gap: 10px; }
+        input { flex: 1; padding: 10px; border-radius: 5px; border: none; background: #40444b; color: white; }
+        button { padding: 10px 20px; background: #7289da; border: none; color: white; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h3>Salas</h3>
+        <button class="btn-sala" onclick="cambiarSala('General')"># General</button>
+        <button class="btn-sala" onclick="cambiarSala('Juegos')"># Juegos</button>
+        <button class="btn-sala" onclick="cambiarSala('Musica')"># Música</button>
+    </div>
+
+    <div id="chat-area">
+        <h2 id="titulo-sala"># General</h2>
+        <div id="mensajes"></div>
+        <form id="form-mensaje">
+            <input type="text" id="input-texto" placeholder="Escribe un mensaje..." autocomplete="off" />
+            <button type="submit">Enviar</button>
+        </form>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        
+        // Estado inicial
+        let salaActual = 'General';
+        let usuario = prompt("Elige un nombre de usuario:") || "Anonimo";
+
+        // Unirse a la sala por defecto al cargar
+        socket.emit('unirseSala', salaActual);
+
+        // Función para cambiar de sala
+        function cambiarSala(nuevaSala) {
+            salaActual = nuevaSala;
+            document.getElementById('titulo-sala').innerText = `# ${nuevaSala}`;
+            document.getElementById('mensajes').innerHTML = ''; // Limpiar chat al cambiar
+            socket.emit('unirseSala', nuevaSala);
+        }
+
+        // Enviar mensaje
+        const form = document.getElementById('form-mensaje');
+        const input = document.getElementById('input-texto');
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (input.value) {
+                // Enviar al servidor
+                socket.emit('mensajeChat', { 
+                    sala: salaActual, 
+                    usuario: usuario, 
+                    texto: input.value 
+                });
+                input.value = '';
+            }
+        });
+
+        // Recibir mensaje del servidor
+        socket.on('mensajeChat', (msg) => {
+            const item = document.createElement('div');
+            item.className = 'mensaje';
+            item.innerHTML = `<span class="autor">${msg.usuario}:</span> ${msg.texto}`;
+            document.getElementById('mensajes').appendChild(item);
+            
+            // Auto-scroll hacia abajo
+            window.scrollTo(0, document.body.scrollHeight);
+        });
+    </script>
+</body>
+</html>
