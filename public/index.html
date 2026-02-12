@@ -4,90 +4,127 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mi Chat Local</title>
-    <style>
-        /* Estilos estilo Discord oscuro */
-        body { display: flex; height: 100vh; margin: 0; font-family: sans-serif; background: #36393f; color: white; }
-        
-        /* Barra lateral de salas */
-        #sidebar { width: 200px; background: #2f3136; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .btn-sala { background: #40444b; border: none; color: #dcddde; padding: 10px; cursor: pointer; text-align: left; border-radius: 5px; }
-        .btn-sala:hover, .activa { background: #7289da; color: white; }
-
-        /* Área de chat */
-        #chat-area { flex: 1; display: flex; flex-direction: column; padding: 20px; }
-        #mensajes { flex: 1; overflow-y: auto; margin-bottom: 20px; background: #36393f; }
-        .mensaje { margin-bottom: 10px; padding: 5px; border-bottom: 1px solid #40444b; }
-        .autor { font-weight: bold; color: #7289da; margin-right: 10px; }
-
-        /* Input */
-        #form-mensaje { display: flex; gap: 10px; }
-        input { flex: 1; padding: 10px; border-radius: 5px; border: none; background: #40444b; color: white; }
-        button { padding: 10px 20px; background: #7289da; border: none; color: white; border-radius: 5px; cursor: pointer; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div id="sidebar">
-        <h3>Salas</h3>
-        <button class="btn-sala" onclick="cambiarSala('General')"># General</button>
-        <button class="btn-sala" onclick="cambiarSala('Juegos')"># Juegos</button>
-        <button class="btn-sala" onclick="cambiarSala('Musica')"># Música</button>
+    <div id="login-screen">
+        <div class="login-box">
+            <h2 style="color: #7289da; margin-bottom: 20px;">Bienvenido</h2>
+            <form id="form-login">
+                <input type="text" id="input-usuario" placeholder="Nombre de usuario..." required autocomplete="off" autofocus>
+                <button type="submit">Entrar al Servidor</button>
+            </form>
+        </div>
     </div>
 
-    <div id="chat-area">
-        <h2 id="titulo-sala"># General</h2>
-        <div id="mensajes"></div>
-        <form id="form-mensaje">
-            <input type="text" id="input-texto" placeholder="Escribe un mensaje..." autocomplete="off" />
-            <button type="submit">Enviar</button>
-        </form>
+    <div id="sidebar">
+        <div class="titulo-app">Servidor Local</div>
+        <button class="btn-sala activa" onclick="cambiarSala('General')"><span class="hash">#</span> General</button>
+        <button class="btn-sala" onclick="cambiarSala('Juegos')"><span class="hash">#</span> Juegos</button>
+        <button class="btn-sala" onclick="cambiarSala('Musica')"><span class="hash">#</span> Música</button>
+    </div>
+
+    <div id="main-content">
+        <div id="chat-area">
+            <header>
+                <span class="header-hash">#</span>
+                <span id="titulo-sala">General</span>
+            </header>
+            <div id="mensajes"></div>
+            <div class="input-area">
+                <form id="form-mensaje">
+                    <input type="text" id="input-texto" placeholder="Enviar mensaje..." autocomplete="off" />
+                </form>
+            </div>
+        </div>
+
+        <div id="users-sidebar">
+            <div class="users-header">Conectados - <span id="contador-usuarios">0</span></div>
+            <div id="lista-usuarios"></div>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
-        
-        // Estado inicial
+        // ... (EL JAVASCRIPT SE QUEDA IGUAL) ...
+        // Copia aquí el mismo script que tenías en el paso anterior
+        const socket = io({ autoConnect: false });
         let salaActual = 'General';
-        let usuario = prompt("Elige un nombre de usuario:") || "Anonimo";
+        let usuario = '';
 
-        // Unirse a la sala por defecto al cargar
-        socket.emit('unirseSala', salaActual);
+        const loginScreen = document.getElementById('login-screen');
+        const formLogin = document.getElementById('form-login');
+        const inputUsuario = document.getElementById('input-usuario');
 
-        // Función para cambiar de sala
-        function cambiarSala(nuevaSala) {
-            salaActual = nuevaSala;
-            document.getElementById('titulo-sala').innerText = `# ${nuevaSala}`;
-            document.getElementById('mensajes').innerHTML = ''; // Limpiar chat al cambiar
-            socket.emit('unirseSala', nuevaSala);
-        }
-
-        // Enviar mensaje
-        const form = document.getElementById('form-mensaje');
-        const input = document.getElementById('input-texto');
-
-        form.addEventListener('submit', (e) => {
+        formLogin.addEventListener('submit', (e) => {
             e.preventDefault();
-            if (input.value) {
-                // Enviar al servidor
-                socket.emit('mensajeChat', { 
-                    sala: salaActual, 
-                    usuario: usuario, 
-                    texto: input.value 
-                });
-                input.value = '';
+            if (inputUsuario.value.trim()) {
+                usuario = inputUsuario.value.trim();
+                loginScreen.style.display = 'none';
+                socket.connect();
+                socket.emit('unirseSala', { sala: salaActual, nombre: usuario });
             }
         });
 
-        // Recibir mensaje del servidor
-        socket.on('mensajeChat', (msg) => {
-            const item = document.createElement('div');
-            item.className = 'mensaje';
-            item.innerHTML = `<span class="autor">${msg.usuario}:</span> ${msg.texto}`;
-            document.getElementById('mensajes').appendChild(item);
-            
-            // Auto-scroll hacia abajo
-            window.scrollTo(0, document.body.scrollHeight);
+        function cambiarSala(nuevaSala) {
+            document.querySelectorAll('.btn-sala').forEach(btn => btn.classList.remove('activa'));
+            const botones = document.querySelectorAll('.btn-sala');
+            for(let btn of botones) {
+                if(btn.innerText.includes(nuevaSala)) btn.classList.add('activa');
+            }
+            salaActual = nuevaSala;
+            document.getElementById('titulo-sala').innerText = nuevaSala;
+            document.getElementById('mensajes').innerHTML = ''; 
+            socket.emit('unirseSala', { sala: nuevaSala, nombre: usuario });
+        }
+
+        const formMensaje = document.getElementById('form-mensaje');
+        const inputTexto = document.getElementById('input-texto');
+
+        formMensaje.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (inputTexto.value) {
+                socket.emit('mensajeChat', { sala: salaActual, usuario: usuario, texto: inputTexto.value });
+                inputTexto.value = '';
+            }
+        });
+
+        function pintarMensaje(msg) {
+            const div = document.createElement('div');
+            div.className = 'mensaje';
+            div.innerHTML = `
+                <div class="mensaje-header">
+                    <span class="autor">${msg.usuario}</span>
+                    <span class="hora">${msg.hora || 'Ahora'}</span>
+                </div>
+                <div class="texto">${msg.texto}</div>
+            `;
+            const contenedor = document.getElementById('mensajes');
+            contenedor.appendChild(div);
+            contenedor.scrollTop = contenedor.scrollHeight;
+        }
+
+        socket.on('mensajeChat', (msg) => pintarMensaje(msg));
+        socket.on('historialSala', (lista) => lista.forEach(msg => pintarMensaje(msg)));
+        
+        socket.on('actualizarUsuarios', (listaNombres) => {
+            const contenedor = document.getElementById('lista-usuarios');
+            document.getElementById('contador-usuarios').innerText = listaNombres.length;
+            contenedor.innerHTML = ''; 
+            listaNombres.forEach(nombre => {
+                const item = document.createElement('div');
+                item.className = 'usuario-item';
+                const inicial = nombre.charAt(0).toUpperCase();
+                item.innerHTML = `
+                    <div class="avatar-wrapper">
+                        <div class="avatar-circle">${inicial}</div>
+                        <div class="status-dot"></div>
+                    </div>
+                    <div class="nombre-usuario">${nombre}</div>
+                `;
+                contenedor.appendChild(item);
+            });
         });
     </script>
 </body>
