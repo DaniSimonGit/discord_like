@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+// 1. IMPORTAMOS PeerServer (Versión independiente)
+const { PeerServer } = require('peer');
 
 const app = express();
 const server = http.createServer(app);
@@ -9,13 +11,15 @@ const io = new Server(server);
 
 // --- MEMORIA DEL SERVIDOR ---
 const historialMensajes = { 'General': [], 'Juegos': [], 'Musica': [] };
-
-// Mapa de usuarios: { socketID: { nombre: "Dani", sala: "General" } }
 const usuariosConectados = {}; 
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Función auxiliar para obtener usuarios de una sala específica
+// 2. INICIAMOS EL SERVIDOR DE VOZ EN EL PUERTO 3001
+// Esto crea un proceso separado solo para el audio.
+const peerServer = PeerServer({ port: 3001, path: '/' });
+
+// ... (El resto del código de Socket.io y funciones auxiliares SE QUEDA IGUAL) ...
 function obtenerUsuariosDeSala(nombreSala) {
     return Object.values(usuariosConectados)
         .filter(u => u.sala === nombreSala)
@@ -23,58 +27,50 @@ function obtenerUsuariosDeSala(nombreSala) {
 }
 
 io.on('connection', (socket) => {
+    // ... (Tu lógica de socket.io intacta) ...
+    // Asegúrate de mantener todo lo que ya tenías aquí dentro
     console.log('Nueva conexión:', socket.id);
 
-    // Evento: Unirse a una sala (Ahora recibimos sala Y nombre)
     socket.on('unirseSala', ({ sala, nombre }) => {
-        // 1. Si el usuario ya estaba en otra sala, lo sacamos de la anterior
+        // ... tu código ...
         if (usuariosConectados[socket.id]) {
             const salaAnterior = usuariosConectados[socket.id].sala;
             socket.leave(salaAnterior);
-            
-            // Avisar a la sala anterior que se fue (para actualizar su lista)
-            // Actualizamos la "ficha" del usuario temporalmente para filtrar correctamente
             usuariosConectados[socket.id].sala = null; 
             io.to(salaAnterior).emit('actualizarUsuarios', obtenerUsuariosDeSala(salaAnterior));
         }
-
-        // 2. Unirse a la nueva sala
         socket.join(sala);
-        
-        // 3. Guardar/Actualizar datos del usuario
         usuariosConectados[socket.id] = { nombre: nombre, sala: sala };
-
-        // 4. Enviar historial de mensajes al usuario
         if (historialMensajes[sala]) {
             socket.emit('historialSala', historialMensajes[sala]);
         }
-
-        // 5. Avisar a TODOS en la nueva sala (incluido el nuevo) para actualizar la lista
         io.to(sala).emit('actualizarUsuarios', obtenerUsuariosDeSala(sala));
     });
 
     socket.on('mensajeChat', ({ sala, usuario, texto }) => {
+        // ... tu código ...
         const nuevoMensaje = {
             usuario,
             texto,
             hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
-
         if (!historialMensajes[sala]) historialMensajes[sala] = [];
         historialMensajes[sala].push(nuevoMensaje);
         if (historialMensajes[sala].length > 50) historialMensajes[sala].shift();
-
         io.to(sala).emit('mensajeChat', nuevoMensaje);
     });
 
-    // Evento: Desconexión (Cerrar ventana)
+    // Evento de Voz
+    socket.on('unirse-voz-global', (peerId) => {
+        socket.broadcast.emit('usuario-conectado-voz', peerId);
+    });
+
     socket.on('disconnect', () => {
+        // ... tu código ...
         const usuario = usuariosConectados[socket.id];
         if (usuario) {
             const salaDondeEstaba = usuario.sala;
-            // Borrar del registro
             delete usuariosConectados[socket.id];
-            // Avisar a la sala para que lo borren de la lista visual
             io.to(salaDondeEstaba).emit('actualizarUsuarios', obtenerUsuariosDeSala(salaDondeEstaba));
         }
     });
@@ -82,5 +78,6 @@ io.on('connection', (socket) => {
 
 const PORT = 3000;
 server.listen(PORT, () => {
-    console.log(`Servidor corriendo en http://localhost:${PORT}`);
+    console.log(`Servidor Chat corriendo en http://localhost:${PORT}`);
+    console.log(`Servidor Voz corriendo en puerto 3001`);
 });

@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mi Chat Local</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
     <div id="login-screen">
@@ -23,6 +25,11 @@
         <button class="btn-sala activa" onclick="cambiarSala('General')"><span class="hash">#</span> General</button>
         <button class="btn-sala" onclick="cambiarSala('Juegos')"><span class="hash">#</span> Juegos</button>
         <button class="btn-sala" onclick="cambiarSala('Musica')"><span class="hash">#</span> Música</button>
+        
+        <div id="audio-controls" style="padding: 10px; background: #292b2f; display: flex; gap: 5px; align-items: center; margin-top: auto;">
+            <button id="btn-voz" onclick="toggleVoz()" style="flex: 1; background: #3ba55c; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer;">Unirse a Voz</button>
+            <button onclick="abrirAjustes()" style="background: #4f545c; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer;">⚙️</button>
+        </div>
     </div>
 
     <div id="main-content">
@@ -45,11 +52,29 @@
         </div>
     </div>
 
+    <div id="settings-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
+        <div style="background: #36393f; padding: 30px; border-radius: 8px; width: 400px; color: white;">
+            <h3>Ajustes de Voz</h3>
+
+            <label style="display: block; margin-bottom: 5px; color: #b9bbbe;">Dispositivo de Entrada (Micrófono)</label>
+            <select id="audio-input" style="width: 100%; padding: 8px; margin-bottom: 20px; background: #202225; color: white; border: none; border-radius: 4px;"></select>
+
+            <label style="display: block; margin-bottom: 5px; color: #b9bbbe;">Dispositivo de Salida (Altavoces)</label>
+            <select id="audio-output" style="width: 100%; padding: 8px; margin-bottom: 20px; background: #202225; color: white; border: none; border-radius: 4px;"></select>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button onclick="cerrarAjustes()" style="padding: 8px 20px; background: #7289da; color: white; border: none; border-radius: 4px; cursor: pointer;">Guardar</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
     <script>
-        // ... (EL JAVASCRIPT SE QUEDA IGUAL) ...
-        // Copia aquí el mismo script que tenías en el paso anterior
+        // AQUÍ SE CREA EL SOCKET UNA ÚNICA VEZ
         const socket = io({ autoConnect: false });
+        
         let salaActual = 'General';
         let usuario = '';
 
@@ -57,6 +82,7 @@
         const formLogin = document.getElementById('form-login');
         const inputUsuario = document.getElementById('input-usuario');
 
+        // Login
         formLogin.addEventListener('submit', (e) => {
             e.preventDefault();
             if (inputUsuario.value.trim()) {
@@ -67,18 +93,20 @@
             }
         });
 
+        // Cambiar Sala
         function cambiarSala(nuevaSala) {
             document.querySelectorAll('.btn-sala').forEach(btn => btn.classList.remove('activa'));
             const botones = document.querySelectorAll('.btn-sala');
-            for(let btn of botones) {
-                if(btn.innerText.includes(nuevaSala)) btn.classList.add('activa');
+            for (let btn of botones) {
+                if (btn.innerText.includes(nuevaSala)) btn.classList.add('activa');
             }
             salaActual = nuevaSala;
             document.getElementById('titulo-sala').innerText = nuevaSala;
-            document.getElementById('mensajes').innerHTML = ''; 
+            document.getElementById('mensajes').innerHTML = '';
             socket.emit('unirseSala', { sala: nuevaSala, nombre: usuario });
         }
 
+        // Enviar Mensaje
         const formMensaje = document.getElementById('form-mensaje');
         const inputTexto = document.getElementById('input-texto');
 
@@ -90,6 +118,7 @@
             }
         });
 
+        // Pintar Mensajes
         function pintarMensaje(msg) {
             const div = document.createElement('div');
             div.className = 'mensaje';
@@ -105,13 +134,14 @@
             contenedor.scrollTop = contenedor.scrollHeight;
         }
 
+        // Eventos de Socket (Chat)
         socket.on('mensajeChat', (msg) => pintarMensaje(msg));
         socket.on('historialSala', (lista) => lista.forEach(msg => pintarMensaje(msg)));
-        
+
         socket.on('actualizarUsuarios', (listaNombres) => {
             const contenedor = document.getElementById('lista-usuarios');
             document.getElementById('contador-usuarios').innerText = listaNombres.length;
-            contenedor.innerHTML = ''; 
+            contenedor.innerHTML = '';
             listaNombres.forEach(nombre => {
                 const item = document.createElement('div');
                 item.className = 'usuario-item';
@@ -127,5 +157,8 @@
             });
         });
     </script>
+
+    <script src="audio_script.js"></script>
+
 </body>
 </html>
