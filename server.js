@@ -27,8 +27,7 @@ function obtenerUsuariosDeSala(nombreSala) {
 }
 
 io.on('connection', (socket) => {
-    // ... (Tu lógica de socket.io intacta) ...
-    // Asegúrate de mantener todo lo que ya tenías aquí dentro
+
     console.log('Nueva conexión:', socket.id);
 
     socket.on('unirseSala', ({ sala, nombre }) => {
@@ -48,7 +47,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('mensajeChat', ({ sala, usuario, texto }) => {
-        // ... tu código ...
         const nuevoMensaje = {
             usuario,
             texto,
@@ -72,6 +70,21 @@ io.on('connection', (socket) => {
             const salaDondeEstaba = usuario.sala;
             delete usuariosConectados[socket.id];
             io.to(salaDondeEstaba).emit('actualizarUsuarios', obtenerUsuariosDeSala(salaDondeEstaba));
+        }
+    });
+
+    socket.on('hablando', () => {
+        const usuario = usuariosConectados[socket.id];
+        if (usuario) {
+            socket.broadcast.to(usuario.sala).emit('usuario-hablando', usuario.nombre);
+        }
+    });
+
+    // Evento: Alguien se calla
+    socket.on('silencio', () => {
+        const usuario = usuariosConectados[socket.id];
+        if (usuario) {
+            socket.broadcast.to(usuario.sala).emit('usuario-callado', usuario.nombre);
         }
     });
 });

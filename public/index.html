@@ -170,6 +170,10 @@
             listaNombres.forEach(nombre => {
                 const item = document.createElement('div');
                 item.className = 'usuario-item';
+
+                //ID único para encontrar al usuario
+                item.id = `user-${nombre}`;
+                
                 const inicial = nombre.charAt(0).toUpperCase();
                 item.innerHTML = `
                     <div class="avatar-wrapper">

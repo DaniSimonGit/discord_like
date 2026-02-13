@@ -65,7 +65,7 @@ function toggleVoz() {
 }
 
 function unirseVoz() {
-    // CAMBIO IMPORTANTE: Apuntamos al puerto 3001
+    // Apuntamos al puerto 3001
     myPeer = new Peer(undefined, {
         host: window.location.hostname, // Usa la IP actual automáticamente
         port: 3001,
@@ -99,6 +99,8 @@ function unirseVoz() {
         video: false
     }).then(stream => {
         myStream = stream;
+
+        iniciarDetectorVoz(stream);
 
         // A) ALGUIEN ME LLAMA (Recibir llamada)
         myPeer.on('call', call => {
@@ -212,3 +214,82 @@ function toggleAuriculares() {
         btnAudio.innerText = "🙉";
     }
 }
+
+// --- DETECCIÓN DE VOZ (HALO VERDE) ---
+let audioContext = null;
+let analyser = null;
+let microphone = null;
+let javascriptNode = null;
+let hablandoActualmente = false;
+
+function iniciarDetectorVoz(stream) {
+    // 1. Configurar contexto de audio
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
+    // 2. Crear analizador
+    analyser = audioContext.createAnalyser();
+    analyser.smoothingTimeConstant = 0.3; // Suavizar picos
+    analyser.fftSize = 1024;
+
+    // 3. Conectar stream al analizador
+    microphone = audioContext.createMediaStreamSource(stream);
+    microphone.connect(analyser);
+
+    // 4. Procesador para leer el volumen cada poco tiempo
+    javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
+    analyser.connect(javascriptNode);
+    javascriptNode.connect(audioContext.destination);
+
+    javascriptNode.onaudioprocess = function() {
+        const array = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(array);
+        
+        // Calcular volumen promedio
+        let values = 0;
+        const length = array.length;
+        for (let i = 0; i < length; i++) {
+            values += array[i];
+        }
+        const average = values / length;
+
+        // UMBRAL DE VOZ (Ajustar si es muy sensible)
+        const umbral = 10; 
+
+        if (average > umbral && !hablandoActualmente) {
+            // Empezó a hablar
+            hablandoActualmente = true;
+            iluminarYo(true); // Iluminarme a mí mismo localmente
+            socket.emit('hablando');
+        } else if (average < umbral && hablandoActualmente) {
+            // Dejó de hablar
+            hablandoActualmente = false;
+            iluminarYo(false); // Apagarme a mí mismo
+            socket.emit('silencio');
+        }
+    }
+}
+
+// Función auxiliar para iluminar mi propio avatar (ya que el socket no me lo devuelve a mí)
+function iluminarYo(encender) {
+    // Necesitamos saber mi nombre de usuario global. 
+    // Como está en el otro script, una forma sucia pero rápida es buscar el ID que contenga mi nombre
+    // O mejor: usar la variable 'usuario' si fuera accesible, pero aquí usaremos el DOM.
+    // Buscamos el item que NO sea de los demás (esto es un parche rápido, lo ideal es pasar el nombre a unirseVoz)
+    const miNombre = document.getElementById('input-usuario').value; // Truco: leemos el input del login (que está oculto pero tiene el valor)
+    activarHalo(miNombre, encender);
+}
+
+// Función para encender/apagar el CSS
+function activarHalo(nombre, encender) {
+    const item = document.getElementById(`user-${nombre}`);
+    if (item) {
+        if (encender) item.classList.add('hablando');
+        else item.classList.remove('hablando');
+    }
+}
+
+// ESCUCHAR EVENTOS DE OTROS
+socket.on('usuario-hablando', (nombre) => activarHalo(nombre, true));
+socket.on('usuario-callado', (nombre) => activarHalo(nombre, false));

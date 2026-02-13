@@ -336,3 +336,10 @@ header {
 #audio-controls button:hover {
     filter: brightness(1.2);
 }
+
+/* EFECTO DE HABLAR (Halo Verde) */
+.hablando .avatar-circle {
+    box-shadow: 0 0 0 2px #3ba55c, 0 0 10px #3ba55c; /* Borde sólido + Resplandor */
+    transition: all 0.1s; /* Transición rápida */
+    transform: scale(1.05); /* Pequeño "pop" al hablar */
+}
