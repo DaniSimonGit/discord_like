@@ -14,7 +14,8 @@
         <div class="login-box">
             <h2 style="color: #7289da; margin-bottom: 20px;">Bienvenido</h2>
             <form id="form-login">
-                <input type="text" id="input-usuario" placeholder="Nombre de usuario..." required autocomplete="off" autofocus>
+                <input type="text" id="input-usuario" placeholder="Nombre de usuario..." required autocomplete="off"
+                    autofocus>
                 <button type="submit">Entrar al Servidor</button>
             </form>
         </div>
@@ -25,10 +26,29 @@
         <button class="btn-sala activa" onclick="cambiarSala('General')"><span class="hash">#</span> General</button>
         <button class="btn-sala" onclick="cambiarSala('Juegos')"><span class="hash">#</span> Juegos</button>
         <button class="btn-sala" onclick="cambiarSala('Musica')"><span class="hash">#</span> Música</button>
-        
-        <div id="audio-controls" style="padding: 10px; background: #292b2f; display: flex; gap: 5px; align-items: center; margin-top: auto;">
-            <button id="btn-voz" onclick="toggleVoz()" style="flex: 1; background: #3ba55c; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer;">Unirse a Voz</button>
-            <button onclick="abrirAjustes()" style="background: #4f545c; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer;">⚙️</button>
+
+        <div id="audio-controls"
+            style="padding: 10px; background: #292b2f; display: flex; gap: 8px; align-items: center; margin-top: auto;">
+
+            <button id="btn-voz" onclick="toggleVoz()" title="Conectar Voz"
+                style="flex: 1; background: #3ba55c; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                📞
+            </button>
+
+            <button id="btn-micro" onclick="toggleMicrofono()" title="Silenciar Micrófono"
+                style="width: 40px; background: #2f3136; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">
+                🎤
+            </button>
+
+            <button id="btn-audio" onclick="toggleAuriculares()" title="Ensordecer"
+                style="width: 40px; background: #2f3136; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">
+                🎧
+            </button>
+
+            <button onclick="abrirAjustes()" title="Ajustes"
+                style="width: 40px; background: #2f3136; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">
+                ⚙️
+            </button>
         </div>
     </div>
 
@@ -52,18 +72,23 @@
         </div>
     </div>
 
-    <div id="settings-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
+    <div id="settings-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
         <div style="background: #36393f; padding: 30px; border-radius: 8px; width: 400px; color: white;">
             <h3>Ajustes de Voz</h3>
 
-            <label style="display: block; margin-bottom: 5px; color: #b9bbbe;">Dispositivo de Entrada (Micrófono)</label>
-            <select id="audio-input" style="width: 100%; padding: 8px; margin-bottom: 20px; background: #202225; color: white; border: none; border-radius: 4px;"></select>
+            <label style="display: block; margin-bottom: 5px; color: #b9bbbe;">Dispositivo de Entrada
+                (Micrófono)</label>
+            <select id="audio-input"
+                style="width: 100%; padding: 8px; margin-bottom: 20px; background: #202225; color: white; border: none; border-radius: 4px;"></select>
 
             <label style="display: block; margin-bottom: 5px; color: #b9bbbe;">Dispositivo de Salida (Altavoces)</label>
-            <select id="audio-output" style="width: 100%; padding: 8px; margin-bottom: 20px; background: #202225; color: white; border: none; border-radius: 4px;"></select>
+            <select id="audio-output"
+                style="width: 100%; padding: 8px; margin-bottom: 20px; background: #202225; color: white; border: none; border-radius: 4px;"></select>
 
             <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                <button onclick="cerrarAjustes()" style="padding: 8px 20px; background: #7289da; color: white; border: none; border-radius: 4px; cursor: pointer;">Guardar</button>
+                <button onclick="cerrarAjustes()"
+                    style="padding: 8px 20px; background: #7289da; color: white; border: none; border-radius: 4px; cursor: pointer;">Guardar</button>
             </div>
         </div>
     </div>
@@ -74,7 +99,7 @@
     <script>
         // AQUÍ SE CREA EL SOCKET UNA ÚNICA VEZ
         const socket = io({ autoConnect: false });
-        
+
         let salaActual = 'General';
         let usuario = '';
 
@@ -161,4 +186,5 @@
     <script src="audio_script.js"></script>
 
 </body>
+
 </html>

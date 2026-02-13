@@ -3,8 +3,11 @@
 // Variables de estado
 let myPeer = null;
 let myStream = null;
-const peersConectados = {}; 
+const peersConectados = {};
 let enLlamada = false;
+
+let micEnabled = true;   // Empieza activado
+let audioEnabled = true; // Empieza activado
 
 // Elementos del DOM
 const selectMic = document.getElementById('audio-input');
@@ -12,21 +15,24 @@ const selectAltavoz = document.getElementById('audio-output');
 const btnVoz = document.getElementById('btn-voz');
 const modal = document.getElementById('settings-modal');
 
+const btnMicro = document.getElementById('btn-micro');
+const btnAudio = document.getElementById('btn-audio');
+
 // 1. OBTENER LISTA DE DISPOSITIVOS
 async function obtenerDispositivos() {
     try {
         // Pedir permiso primero para desbloquear la lista de dispositivos
         await navigator.mediaDevices.getUserMedia({ audio: true });
-        
+
         const devices = await navigator.mediaDevices.enumerateDevices();
-        
+
         selectMic.innerHTML = '';
         selectAltavoz.innerHTML = '';
 
         devices.forEach(device => {
             const option = document.createElement('option');
             option.value = device.deviceId;
-            option.text = device.label || `Dispositivo ${device.deviceId.slice(0,5)}...`;
+            option.text = device.label || `Dispositivo ${device.deviceId.slice(0, 5)}...`;
 
             if (device.kind === 'audioinput') {
                 selectMic.appendChild(option);
@@ -41,7 +47,7 @@ async function obtenerDispositivos() {
 
 // 2. ABRIR/CERRAR MODAL
 function abrirAjustes() {
-    obtenerDispositivos(); 
+    obtenerDispositivos();
     modal.style.display = 'flex';
 }
 
@@ -62,7 +68,7 @@ function unirseVoz() {
     // CAMBIO IMPORTANTE: Apuntamos al puerto 3001
     myPeer = new Peer(undefined, {
         host: window.location.hostname, // Usa la IP actual automáticamente
-        port: 3001, 
+        port: 3001,
         path: '/',
         // Mantenemos la config de Google para evitar errores
         config: {
@@ -77,8 +83,8 @@ function unirseVoz() {
     myPeer.on('open', id => {
         console.log('Mi ID de Peer es: ' + id);
         // Avisamos a los demás usuarios por Socket.io que estamos listos para hablar
-        socket.emit('unirse-voz-global', id); 
-        
+        socket.emit('unirse-voz-global', id);
+
         // Cambio visual del botón
         btnVoz.innerText = "Desconectar Voz";
         btnVoz.style.background = "#ed4245"; // Rojo
@@ -87,7 +93,7 @@ function unirseVoz() {
 
     // Capturamos el audio del micrófono seleccionado
     const micId = selectMic.value;
-    
+
     navigator.mediaDevices.getUserMedia({
         audio: { deviceId: micId ? { exact: micId } : undefined },
         video: false
@@ -97,7 +103,7 @@ function unirseVoz() {
         // A) ALGUIEN ME LLAMA (Recibir llamada)
         myPeer.on('call', call => {
             call.answer(stream); // Contesto enviándole mi audio también
-            
+
             const audio = document.createElement('audio');
             call.on('stream', userAudioStream => {
                 addAudioStream(audio, userAudioStream);
@@ -107,7 +113,7 @@ function unirseVoz() {
         // B) YO LLAMO A ALGUIEN NUEVO (Cuando socket me avisa)
         socket.on('usuario-conectado-voz', userId => {
             // Solo conectamos si no somos nosotros mismos
-            if(userId !== myPeer.id) {
+            if (userId !== myPeer.id) {
                 conectarNuevoUsuario(userId, stream);
             }
         });
@@ -121,14 +127,14 @@ function unirseVoz() {
 function salirVoz() {
     if (myPeer) myPeer.destroy();
     if (myStream) myStream.getTracks().forEach(track => track.stop());
-    
+
     // Eliminar audios de otros
     document.querySelectorAll('audio').forEach(a => a.remove());
-    
+
     enLlamada = false;
     btnVoz.innerText = "Unirse a Voz";
     btnVoz.style.background = "#3ba55c"; // Verde
-    
+
     // Limpiamos listeners para evitar duplicados si nos reconectamos
     socket.off('usuario-conectado-voz');
 }
@@ -137,11 +143,11 @@ function conectarNuevoUsuario(userId, stream) {
     console.log("Llamando a nuevo usuario:", userId);
     const call = myPeer.call(userId, stream);
     const audio = document.createElement('audio');
-    
+
     call.on('stream', userAudioStream => {
         addAudioStream(audio, userAudioStream);
     });
-    
+
     call.on('close', () => {
         audio.remove();
     });
@@ -151,16 +157,58 @@ function conectarNuevoUsuario(userId, stream) {
 
 function addAudioStream(audio, stream) {
     audio.srcObject = stream;
-    
-    // Configurar salida de audio (Altavoces)
+
+    // --- CAMBIO AQUÍ: Respetar si tengo los cascos quitados ---
+    audio.muted = !audioEnabled;
+    // ----------------------------------------------------------
+
     const speakerId = selectAltavoz.value;
-    if (speakerId && audio.setSinkId) { // setSinkId solo funciona en Chrome/Electron por ahora
-        audio.setSinkId(speakerId).catch(e => console.warn("No se pudo cambiar salida de audio:", e));
+    if (speakerId && audio.setSinkId) {
+        audio.setSinkId(speakerId).catch(e => console.warn("No se pudo cambiar salida:", e));
     }
-    
+
     audio.addEventListener('loadedmetadata', () => {
         audio.play();
     });
-    
+
     document.body.append(audio);
+}
+
+// --- FUNCIONES DE MUTE / DEAFEN ---
+
+function toggleMicrofono() {
+    // Si no estamos en llamada, no hacemos nada
+    if (!enLlamada || !myStream) return alert("Debes unirte a la voz primero.");
+
+    micEnabled = !micEnabled; // Invertir estado (true -> false)
+
+    // Desactivar/Activar la pista de audio que enviamos
+    myStream.getAudioTracks()[0].enabled = micEnabled;
+
+    // Actualizar botón visualmente
+    if (micEnabled) {
+        btnMicro.classList.remove('btn-rojo');
+        btnMicro.innerText = "🎤";
+    } else {
+        btnMicro.classList.add('btn-rojo');
+        btnMicro.innerText = "🔇";
+    }
+}
+
+function toggleAuriculares() {
+    audioEnabled = !audioEnabled; // Invertir estado
+
+    // 1. Mutear/Desmutear todos los audios de otros usuarios
+    document.querySelectorAll('audio').forEach(audioTag => {
+        audioTag.muted = !audioEnabled;
+    });
+
+    // 2. Actualizar botón visualmente
+    if (audioEnabled) {
+        btnAudio.classList.remove('btn-rojo');
+        btnAudio.innerText = "🎧";
+    } else {
+        btnAudio.classList.add('btn-rojo');
+        btnAudio.innerText = "🙉";
+    }
 }
