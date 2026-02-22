@@ -1,5 +1,7 @@
 # Dependencias de Node (¡Muy importante!)
 node_modules/
+out/
+
 
 # Archivos de sistema y logs
 .DS_Store

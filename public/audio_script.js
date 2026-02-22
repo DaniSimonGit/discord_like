@@ -1,5 +1,9 @@
 // audio_script.js
 
+
+//IP
+const savedIP = localStorage.getItem('chatServerIP');
+
 // Variables de estado
 let myPeer = null;
 let myStream = null;
@@ -8,6 +12,8 @@ let enLlamada = false;
 
 let micEnabled = true;   // Empieza activado
 let audioEnabled = true; // Empieza activado
+
+
 
 // Elementos del DOM
 const selectMic = document.getElementById('audio-input');
@@ -65,9 +71,15 @@ function toggleVoz() {
 }
 
 function unirseVoz() {
-    // Apuntamos al puerto 3001
+    // SEGURO: Si no hay IP, avisamos y no intentamos conectar
+    if (!savedIP) {
+        alert("Falta la IP del servidor. Configúrala en la pantalla principal.");
+        return;
+    }
+
+    // Apuntamos al puerto 3001 usando la IP dinámica
     myPeer = new Peer(undefined, {
-        host: window.location.hostname, // Usa la IP actual automáticamente
+        host: savedIP, // <--- AQUÍ ESTÁ EL CAMBIO PRINCIPAL
         port: 3001,
         path: '/',
         // Mantenemos la config de Google para evitar errores
