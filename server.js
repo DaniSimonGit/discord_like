@@ -7,7 +7,14 @@ const { PeerServer } = require('peer');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// CORS
+const io = require('socket.io')(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
 
 // --- MEMORIA DEL SERVIDOR ---
 const historialMensajes = { 'General': [], 'Juegos': [], 'Musica': [] };
@@ -90,7 +97,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = 3000;
-server.listen(PORT, () => {
-    console.log(`Servidor Chat corriendo en http://localhost:${PORT}`);
-    console.log(`Servidor Voz corriendo en puerto 3001`);
+// El '0.0.0.0' es la clave mágica. Significa: "Escucha en TODAS mis IPs, incluida la de ZeroTier"
+server.listen(3000, '0.0.0.0', () => {
+    console.log('Servidor Chat corriendo en puerto 3000 (Escuchando en todas las interfaces)');
 });

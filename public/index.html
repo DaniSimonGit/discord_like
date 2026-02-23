@@ -10,6 +10,13 @@
 
 <body>
 
+    <div id="ip-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #202225; z-index: 9999; justify-content: center; align-items: center; flex-direction: column;">
+        <h2 style="color: white; margin-bottom: 20px;">Configuración del Servidor</h2>
+        <p style="color: #b9bbbe; margin-bottom: 10px;">Introduce la IP del Host (ZeroTier):</p>
+        <input type="text" id="ip-input" placeholder="Ej: 10.222.195.2" style="padding: 10px; width: 300px; margin-bottom: 20px; border-radius: 5px; border: none; outline: none;">
+        <button onclick="guardarIP()" style="padding: 10px 20px; background: #5865F2; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Guardar y Reiniciar</button>
+    </div>
+
     <div id="login-screen">
         <div class="login-box">
             <h2 style="color: #7289da; margin-bottom: 20px;">Bienvenido</h2>
@@ -28,8 +35,13 @@
         <button class="btn-sala" onclick="cambiarSala('Musica')"><span class="hash">#</span> Música</button>
 
         <div id="audio-controls"
+        
             style="padding: 10px; background: #292b2f; display: flex; gap: 8px; align-items: center; margin-top: auto;">
 
+            <button onclick="borrarIP()" title="Cambiar IP Servidor"
+                style="width: 40px; background: #ed4245; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">
+                🌐
+            </button>
             <button id="btn-voz" onclick="toggleVoz()" title="Conectar Voz"
                 style="flex: 1; background: #3ba55c; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">
                 📞
@@ -97,9 +109,43 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
     <script>
-        // AQUÍ SE CREA EL SOCKET UNA ÚNICA VEZ
-        const socket = io({ autoConnect: false });
+        // 1. GESTIÓN DE IP DINÁMICA
+        let serverIP = localStorage.getItem('chatServerIP');
+        let socket; // Lo declaramos con 'let' en vez de 'const'
 
+        const ipModal = document.getElementById('ip-modal');
+        const ipInput = document.getElementById('ip-input');
+
+        if (!serverIP) {
+            // Si no hay IP guardada, mostramos la ventana
+            if (ipModal) ipModal.style.display = 'flex';
+            
+            // TRUCO: Creamos un "socket de mentira" para que los eventos de abajo
+            // (socket.on, socket.emit) no den error de "undefined" mientras esperamos la IP.
+            socket = { on: () => {}, emit: () => {}, connect: () => {} };
+        } else {
+            // Si ya hay IP, inicializamos el socket de verdad
+            socket = io(`http://${serverIP}:3000`, { autoConnect: false });
+        }
+
+        // Función para guardar desde el botón de la ventana
+        function guardarIP() {
+            const ip = ipInput.value.trim();
+            if (ip) {
+                localStorage.setItem('chatServerIP', ip);
+                location.reload(); // Recargamos para aplicar
+            }
+        }
+
+        // Función para cambiar la IP después (Botón 🌐)
+        function borrarIP() {
+            if(confirm('¿Quieres cambiar la IP del servidor? La aplicación se reiniciará.')){
+                localStorage.removeItem('chatServerIP');
+                location.reload();
+            }
+        }
+
+        // --- CÓDIGO ORIGINAL DEL CHAT ---
         let salaActual = 'General';
         let usuario = '';
 
