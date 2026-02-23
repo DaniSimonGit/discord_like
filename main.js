@@ -5,6 +5,7 @@ const path = require('path');
 // Al hacer require, node ejecuta el código de server.js inmediatamente.
 // Esto levanta el servidor en el puerto 3000 en segundo plano.
 require('./server.js'); 
+app.commandLine.appendSwitch('unsafely-treat-insecure-origin-as-secure', 'http://10.222.195.2:3000');
 
 function createWindow() {
     // 2. CREAR LA VENTANA
@@ -43,4 +44,9 @@ app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
     }
+
+    event.preventDefault();
+  callback(true); // Solo para desarrollo
+
+    
 });
