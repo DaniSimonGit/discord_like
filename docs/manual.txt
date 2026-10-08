@@ -1,0 +1,93 @@
+===============================================================================
+                       MANUAL DE USUARIO Y DOCUMENTACIÓN
+                        PROYECTO: DISCORD_LIKE (ELECTRON)
+===============================================================================
+
+1. DESCRIPCIÓN DEL PROYECTO
+-------------------------------------------------------------------------------
+"Discord_like" es una aplicación de escritorio multiplataforma desarrollada con 
+Electron, Node.js, Express, Socket.io y PeerJS (WebRTC). Réplica ligera y privada 
+de Discord orientada a la comunicación por texto y voz en tiempo real dentro de 
+redes locales (LAN) o redes privadas virtuales (VPN como ZeroTier).
+
+
+2. REQUISITOS DEL SISTEMA
+-------------------------------------------------------------------------------
+- Sistema Operativo: Windows 10/11, Linux o macOS.
+- Para desarrollo: Node.js (v18 o superior) y npm.
+- Permisos de red en el Firewall de Windows para Node.js/Electron.
+
+
+3. CÓMO EJECUTAR LA APLICACIÓN EN DESARROLLO
+-------------------------------------------------------------------------------
+Abre una terminal de comandos en la carpeta raíz del proyecto y ejecuta:
+
+    npm start
+
+Este comando compila los activos e inicia Electron Forge (`electron-forge start`).
+
+
+4. MODOS DE USO Y CONFIGURACIÓN DE RED
+-------------------------------------------------------------------------------
+Al iniciar la aplicación por primera vez se presenta la pantalla de elección:
+
+A) 👑 HOSTEAR SERVIDOR (Ser el Host)
+   - Al pulsar "Hostear Servidor", el proceso principal de Electron arranca el 
+     servidor Node.js backend (`server.js`) escuchando en el puerto 3000 (HTTP/Socket.io) 
+     y el servidor de señalización de voz PeerJS en el puerto 3001.
+   - La aplicación detecta automáticamente todas las direcciones IP de tu equipo 
+     (Wi-Fi, Ethernet, ZeroTier, etc.) y las muestra en la barra lateral con un 
+     botón 📋 para copiarlas con un solo clic.
+
+B) 🤝 UNIRSE AL SERVIDOR (Ser Cliente)
+   - Introduce la IP del Host (por ejemplo `192.168.1.50` o `10.147.17.5`) y pulsa 
+     "Guardar y Conectar".
+   - La app se conectará al servidor del Host sin necesidad de ejecutar un backend local.
+
+
+5. GUÍA PARA CONECTARSE DESDE DISTINTOS ORDENADORES
+-------------------------------------------------------------------------------
+- OPCIÓN 1: Misma casa / Red Local (LAN)
+  El Host pulsa "Hostear Servidor" y comparte su IP local (ej. 192.168.1.35).
+  Los demás eligen "Unirse al Servidor" y colocan esa IP.
+
+- OPCIÓN 2: Por Internet sin abrir puertos (ZeroTier / Tailscale - RECOMENDADO)
+  Todos los usuarios se unen a una misma red en ZeroTier o Tailscale.
+  El Host comparte la IP asignada por ZeroTier (ej. 10.147.17.5).
+  Los demás se conectan colocando esa IP.
+
+- OPCIÓN 3: Por Internet Directo (Apertura de Puertos)
+  El Host redirige en su Router los puertos 3000 (TCP) y 3001 (TCP/UDP) hacia la IP 
+  de su PC. Los demás se conectan usando la IP pública del Host.
+
+
+6. FUNCIONALIDADES DEL CHAT Y DE VOZ
+-------------------------------------------------------------------------------
+- SALAS DE TEXTO: Canales `#General`, `#Juegos` y `#Música`.
+- LISTA DE CONECTADOS: Panel derecho con contadores de usuarios en tiempo real.
+- CANAL DE VOZ WEBRTC: Transmisión de voz P2P de baja latencia.
+- INDICADOR DE VOZ: Halo verde brillante alrededor del avatar al hablar.
+- CONTROLES DE AUDIO: 
+  - 📞 Unirse / 📵 Desconectar Voz
+  - 🎤 Mutear Micrófono
+  - 🎧 Ensordecer (Mutear audio entrante)
+  - ⚙️ Ajustes de entrada/salida de audio
+- 🚪 SALIR: Botón en la cabecera del chat para cerrar sesión limpiamente.
+- 🌐 SERVIDORES: Botón en la barra de audio para cambiar de IP o modo de servidor.
+
+
+7. CÓMO GENERAR EL EJECUTABLE COMPILADO (.EXE)
+-------------------------------------------------------------------------------
+Para compartir la aplicación lista para usar (sin necesidad de VS Code o Node.js 
+en los ordenadores de tus amigos):
+
+1. Ejecuta en la terminal:
+   
+       npm run make
+
+2. Se generará la carpeta `out/make/zip/win32/x64/` conteniendo la aplicación 
+   empaquetada en un archivo `.zip`.
+3. Tus amigos solo tendrán que descomprimir el archivo y hacer doble clic sobre 
+   `discord_like.exe`.
+===============================================================================
+

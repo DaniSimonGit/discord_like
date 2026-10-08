@@ -1,0 +1,131 @@
+===============================================================================
+                       REGISTRO DE ERRORES Y SOLUCIONES
+                        PROYECTO: DISCORD_LIKE (ELECTRON)
+===============================================================================
+
+-------------------------------------------------------------------------------
+FECHA: 2026-10-08
+ERROR 1: Uncaught ReferenceError: require is not defined en index.html
+-------------------------------------------------------------------------------
+SÍNTOMA:
+  Al abrir public/index.html directamente en un navegador web o fuera del flujo
+  principal de Electron, la aplicación se colapsaba con el error:
+  "ReferenceError: require is not defined at index.html:134".
+
+CAUSA:
+  En navegadores web estándar no existe la función require() nativa de Node.js.
+
+SOLUCIÓN:
+  Se implementó una verificación defensiva en index.html:
+  `let ipcRenderer = null; if (typeof require !== 'undefined') { ... }`
+  De esta forma la aplicación puede ejecutarse tanto en Electron como en un
+  navegador web tradicional sin romper la ejecución.
+
+-------------------------------------------------------------------------------
+FECHA: 2026-10-08
+ERROR 2: Secuestro UMD de Socket.io / PeerJS y variables globales no definidas
+-------------------------------------------------------------------------------
+SÍNTOMA:
+  Error en consola: "Uncaught Error at audio_script.js:306". Las variables globales
+  `window.io` y `window.Peer` eran `undefined`.
+
+CAUSA:
+  Con `nodeIntegration: true` activado en Electron, las librerías cargadas vía
+  etiquetas <script> (Socket.io y PeerJS) detectaban la presencia global de
+  `module.exports` de Node.js y se exportaban dentro de `module.exports` en lugar
+  de asignarse a las variables globales de ventana `window.io` y `window.Peer`.
+
+SOLUCIÓN:
+  Se añadió un parche de aislamiento UMD en index.html:
+  ```html
+  <script>if (typeof module === 'object') { window.nodeModule = module; module = undefined; }</script>
+  <script src="socket.io.min.js"></script>
+  <script src="peerjs.min.js"></script>
+  <script>if (window.nodeModule) { module = window.nodeModule; window.nodeModule = undefined; }</script>
+  ```
+
+-------------------------------------------------------------------------------
+FECHA: 2026-10-08
+ERROR 3: Advertencias de Source Maps de PeerJS en DevTools
+-------------------------------------------------------------------------------
+SÍNTOMA:
+  DevTools mostraba advertencias continuas:
+  "Could not read source map for peerjs.min.js.map: ENOENT: no such file".
+
+CAUSA:
+  El archivo compilado de CDN incluía el comentario `//# sourceMappingURL=peerjs.min.js.map`,
+  haciendo que el navegador buscase un archivo .map inexistente.
+
+SOLUCIÓN:
+  Se descargaron `peerjs.min.js` y `socket.io.min.js` localmente en la carpeta `/public`
+  y se eliminaron los comentarios `sourceMappingURL` mediante script.
+
+-------------------------------------------------------------------------------
+FECHA: 2026-10-08
+ERROR 4: Pérdida de suscripción a salas de Socket.io tras reconexión o re-login
+-------------------------------------------------------------------------------
+SÍNTOMA:
+  Tras cerrar sesión o reconectar el socket, los mensajes de chat enviados por el
+  usuario no se mostraban en pantalla ni se distribuían a los demás.
+
+CAUSA:
+  Al desconectar y volver a conectar el socket (o al re-iniciar sesión), el socket
+  obtenía un nuevo `socket.id`. El servidor Socket.io requiere que el cliente vuelva
+  a emitir el evento `unirseSala` para ejecutar `socket.join(sala)`. Sin esto, el
+  socket quedaba fuera de la sala y no recibía las emisiones `io.to(sala)`.
+
+SOLUCIÓN:
+  Se añadió un escuchador automático del evento de conexión:
+  ```javascript
+  socket.on('connect', () => {
+      if (usuario) socket.emit('unirseSala', { sala: salaActual, nombre: usuario });
+  });
+  ```
+
+-------------------------------------------------------------------------------
+FECHA: 2026-10-08
+ERROR 5 (CRÍTICO): Bloqueo de entrada de texto en <input> tras invocar confirm() o alert() nativos
+-------------------------------------------------------------------------------
+SÍNTOMA:
+  Al pulsar el botón 🌐 borrarIP o interactuar con los botones de audio (🎤 / 📞) antes
+  de conectar a voz, la caja de texto del login quedaba inerte. El cursor parpadeaba,
+  el elemento ganaba el foco (`activeElement: INPUT`) y la consola registraba eventos
+  `keydown`, pero las letras NO se escribían en el campo ni se lanzaba el evento `input`.
+
+CAUSA RAÍZ:
+  Bug conocido de Chromium / Electron en Windows con diálogos nativos:
+  Al invocar las funciones del navegador `alert(...)` o `confirm(...)`, Windows abre
+  una ventana nativa emergente (`MessageBoxW`). Al cerrarse, la vista de composición
+  de entrada de texto de Chromium (`RenderWidgetHostViewWin`) pierde la asociación del
+  HWND con el sistema operativo. Aunque JavaScript sigue recibiendo eventos de teclado
+  sintéticos (`keydown`), el gestor de texto de Chromium deshecha los caracteres.
+
+SOLUCIÓN:
+  1. Se eliminó la llamada nativa `confirm()` en `borrarIP()`, sustituyéndola por una
+     recarga limpia `location.reload()`.
+  2. Se reemplazaron todas las alertas nativas `alert(...)` del proyecto por un
+     **Sistema de Notificaciones Toast** flotantes en HTML/CSS (`.toast-notificacion`).
+  3. Se incrementó el `z-index` de `#login-screen` a `50000` en `style.css` para evitar
+     bloqueos por capas transparentes.
+
+-------------------------------------------------------------------------------
+FECHA: 2026-10-08
+ERROR 6: Desbordamiento y corte de elementos en audio-controls y textos del sidebar
+-------------------------------------------------------------------------------
+SÍNTOMA:
+  Al reducir el ancho de la ventana, los botones de `#audio-controls` se cortaban y
+  los nombres de los canales del sidebar desaparecían o se cortaban a la mitad.
+
+CAUSA:
+  Disposición horizontal rígida de 5 botones en una sola fila dentro de una barra
+  lateral de `240px` (o `60px` en modo colapsado) y reglas CSS que ocultaban el texto.
+
+SOLUCIÓN:
+  1. Se refactorizó `#audio-controls` en 2 niveles: botón principal de voz arriba y
+     fila de 4 botones de acción abajo (`.audio-actions`).
+  2. Se envolvieron los nombres de los canales en `<span class="nombre-sala">` con
+     reglas de truncado con puntos suspensivos (`text-overflow: ellipsis`).
+  3. Se configuraron Media Queries en CSS (`@media (max-width: 768px)` y `480px`) para
+     escalar dinámicamente tipografías y anchos sin ocultar ni cortar los textos.
+===============================================================================
+
