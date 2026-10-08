@@ -9,66 +9,84 @@
 </head>
 
 <body>
+    <div id="toast-notificacion" class="toast-notificacion"></div>
 
-    <div id="ip-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #202225; z-index: 9999; justify-content: center; align-items: center; flex-direction: column;">
+    <div id="role-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #202225; z-index: 10000; justify-content: center; align-items: center; flex-direction: column;">
+        <h1 style="color: white; margin-bottom: 40px;">¿Qué quieres hacer?</h1>
+        <div style="display: flex; gap: 20px;">
+            <button onclick="elegirHost()"
+                style="padding: 20px 40px; background: #5865F2; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold; transition: 0.2s;">👑
+                Hostear Servidor</button>
+            <button onclick="elegirJoin()"
+                style="padding: 20px 40px; background: #3ba55c; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold; transition: 0.2s;">🤝
+                Unirse al Servidor</button>
+        </div>
+    </div>
+
+    <div id="ip-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #202225; z-index: 9999; justify-content: center; align-items: center; flex-direction: column;">
         <h2 style="color: white; margin-bottom: 20px;">Configuración del Servidor</h2>
         <p style="color: #b9bbbe; margin-bottom: 10px;">Introduce la IP del Host (ZeroTier):</p>
-        <input type="text" id="ip-input" placeholder="Ej: 10.222.195.2" style="padding: 10px; width: 300px; margin-bottom: 20px; border-radius: 5px; border: none; outline: none;">
-        <button onclick="guardarIP()" style="padding: 10px 20px; background: #5865F2; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Guardar y Reiniciar</button>
+        <input type="text" id="ip-input" placeholder="Ej: 10.222.195.2"
+            style="padding: 10px; width: 300px; margin-bottom: 20px; border-radius: 5px; border: none; outline: none;">
+        <button onclick="guardarIP()"
+            style="padding: 10px 20px; background: #5865F2; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Guardar
+            y Conectar</button>
     </div>
 
     <div id="login-screen">
         <div class="login-box">
             <h2 style="color: #7289da; margin-bottom: 20px;">Bienvenido</h2>
             <form id="form-login">
-                <input type="text" id="input-usuario" placeholder="Nombre de usuario..." required autocomplete="off"
-                    autofocus>
-                <button type="submit">Entrar al Servidor</button>
+                <input type="text" id="input-usuario" placeholder="Nombre de usuario..." required autocomplete="off" autofocus>
+                
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button type="submit" style="flex: 1;">Entrar al Servidor</button>
+                    <button type="button" onclick="borrarIP()" title="Volver al menú principal"
+                        style="background: #ed4245; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                        Cancelar
+                    </button>
+                </div>
             </form>
         </div>
     </div>
 
     <div id="sidebar">
         <div class="titulo-app">Servidor Local</div>
-        <button class="btn-sala activa" onclick="cambiarSala('General')"><span class="hash">#</span> General</button>
-        <button class="btn-sala" onclick="cambiarSala('Juegos')"><span class="hash">#</span> Juegos</button>
-        <button class="btn-sala" onclick="cambiarSala('Musica')"><span class="hash">#</span> Música</button>
+        <div id="host-ip-banner" style="display: none; padding: 6px 8px; background: #2f3136; border-bottom: 1px solid #202225; text-align: center; font-size: 11px; color: #b9bbbe; margin-bottom: 8px;">
+            <div style="font-weight: bold; color: #3ba55c; margin-bottom: 2px;">👑 IP para conectar:</div>
+            <div id="host-ip-list"></div>
+        </div>
+        <button class="btn-sala activa" onclick="cambiarSala('General')" title="General"><span class="hash">#</span><span class="nombre-sala">General</span></button>
+        <button class="btn-sala" onclick="cambiarSala('Juegos')" title="Juegos"><span class="hash">#</span><span class="nombre-sala">Juegos</span></button>
+        <button class="btn-sala" onclick="cambiarSala('Musica')" title="Música"><span class="hash">#</span><span class="nombre-sala">Música</span></button>
 
-        <div id="audio-controls"
-        
-            style="padding: 10px; background: #292b2f; display: flex; gap: 8px; align-items: center; margin-top: auto;">
-
-            <button onclick="borrarIP()" title="Cambiar IP Servidor"
-                style="width: 40px; background: #ed4245; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">
-                🌐
+        <div id="audio-controls">
+            <button id="btn-voz" onclick="toggleVoz()" title="Conectar / Desconectar Voz">
+                <span class="btn-voz-icon">📞</span>
+                <span class="btn-voz-texto">Unirse a Voz</span>
             </button>
-            <button id="btn-voz" onclick="toggleVoz()" title="Conectar Voz"
-                style="flex: 1; background: #3ba55c; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                📞
-            </button>
-
-            <button id="btn-micro" onclick="toggleMicrofono()" title="Silenciar Micrófono"
-                style="width: 40px; background: #2f3136; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">
-                🎤
-            </button>
-
-            <button id="btn-audio" onclick="toggleAuriculares()" title="Ensordecer"
-                style="width: 40px; background: #2f3136; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">
-                🎧
-            </button>
-
-            <button onclick="abrirAjustes()" title="Ajustes"
-                style="width: 40px; background: #2f3136; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer;">
-                ⚙️
-            </button>
+            <div class="audio-actions">
+                <button onclick="borrarIP()" title="Cambiar Servidor">🌐</button>
+                <button id="btn-micro" onclick="toggleMicrofono()" title="Silenciar Micrófono">🎤</button>
+                <button id="btn-audio" onclick="toggleAuriculares()" title="Ensordecer">🎧</button>
+                <button onclick="abrirAjustes()" title="Ajustes">⚙️</button>
+            </div>
         </div>
     </div>
 
     <div id="main-content">
         <div id="chat-area">
-            <header>
-                <span class="header-hash">#</span>
-                <span id="titulo-sala">General</span>
+            <header style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <span class="header-hash">#</span>
+                    <span id="titulo-sala">General</span>
+                </div>
+                <button onclick="cerrarSesion()" title="Cerrar sesión"
+                    style="background: #ed4245; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;">
+                    🚪 Salir
+                </button>
             </header>
             <div id="mensajes"></div>
             <div class="input-area">
@@ -105,64 +123,179 @@
         </div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Evitar conflictos entre UMD y Node/Electron -->
+    <script>
+        if (typeof module === 'object') {
+            window.nodeModule = module;
+            module = undefined;
+        }
+    </script>
+
+    <script src="socket.io.min.js"></script>
+    <script src="peerjs.min.js"></script>
 
     <script>
-        // 1. GESTIÓN DE IP DINÁMICA
-        let serverIP = localStorage.getItem('chatServerIP');
-        let socket; // Lo declaramos con 'let' en vez de 'const'
+        if (window.nodeModule) {
+            module = window.nodeModule;
+            window.nodeModule = undefined;
+        }
+    </script>
 
+    <script>
+        // Importamos el puente de comunicación de Electron de forma segura
+        let ipcRenderer = null;
+        if (typeof require !== 'undefined') {
+            try {
+                const electron = require('electron');
+                ipcRenderer = electron.ipcRenderer;
+            } catch (e) {
+                console.warn("Electron require no disponible en el navegador web.");
+            }
+        }
+
+        // GESTIÓN DE IP DINÁMICA Y ROLES
+        let serverIP = localStorage.getItem('chatServerIP');
+        let socket;
+
+        const roleModal = document.getElementById('role-modal');
         const ipModal = document.getElementById('ip-modal');
         const ipInput = document.getElementById('ip-input');
-
-        if (!serverIP) {
-            // Si no hay IP guardada, mostramos la ventana
-            if (ipModal) ipModal.style.display = 'flex';
-            
-            // TRUCO: Creamos un "socket de mentira" para que los eventos de abajo
-            // (socket.on, socket.emit) no den error de "undefined" mientras esperamos la IP.
-            socket = { on: () => {}, emit: () => {}, connect: () => {} };
-        } else {
-            // Si ya hay IP, inicializamos el socket de verdad
-            socket = io(`http://${serverIP}:3000`, { autoConnect: false });
-        }
-
-        // Función para guardar desde el botón de la ventana
-        function guardarIP() {
-            const ip = ipInput.value.trim();
-            if (ip) {
-                localStorage.setItem('chatServerIP', ip);
-                location.reload(); // Recargamos para aplicar
-            }
-        }
-
-        // Función para cambiar la IP después (Botón 🌐)
-        function borrarIP() {
-            if(confirm('¿Quieres cambiar la IP del servidor? La aplicación se reiniciará.')){
-                localStorage.removeItem('chatServerIP');
-                location.reload();
-            }
-        }
-
-        // --- CÓDIGO ORIGINAL DEL CHAT ---
-        let salaActual = 'General';
-        let usuario = '';
-
         const loginScreen = document.getElementById('login-screen');
         const formLogin = document.getElementById('form-login');
         const inputUsuario = document.getElementById('input-usuario');
 
+        function ocultarTodosLosModales() {
+            roleModal.style.display = 'none';
+            ipModal.style.display = 'none';
+            loginScreen.style.display = 'none';
+            const settingsModal = document.getElementById('settings-modal');
+            if (settingsModal) settingsModal.style.display = 'none';
+        }
+
+        ocultarTodosLosModales();
+
+        if (!serverIP) {
+            // No hay configuración: Mostramos la ventana de Host/Join
+            roleModal.style.display = 'flex';
+            socket = { on: () => { }, off: () => { }, emit: () => { }, connect: () => { } };
+        } else {
+            // Ya hay configuración guardada: Mostramos el login
+            loginScreen.style.display = 'flex';
+            inputUsuario.disabled = false;
+            setTimeout(() => inputUsuario.focus(), 100);
+
+            if (serverIP === 'localhost' && ipcRenderer) {
+                ipcRenderer.send('iniciar-host');
+                ipcRenderer.send('obtener-ips-host');
+                ipcRenderer.on('ips-host-obtenidas', (event, ips) => {
+                    const banner = document.getElementById('host-ip-banner');
+                    const listDiv = document.getElementById('host-ip-list');
+                    if (banner && listDiv && ips.length > 0) {
+                        banner.style.display = 'block';
+                        listDiv.innerHTML = ips.map(item => `
+                            <div style="margin: 3px 0; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                <span style="font-family: monospace; background: #202225; padding: 2px 4px; border-radius: 3px; color: #fff; font-size: 11px;">${item.ip}</span>
+                                <button onclick="navigator.clipboard.writeText('${item.ip}')" title="Copiar IP ${item.ip}" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 0;">📋</button>
+                            </div>
+                        `).join('');
+                    }
+                });
+            }
+            socket = io(`http://${serverIP}:3000`, { autoConnect: false });
+            inicializarSocketEventos();
+        }
+
+        // --- SISTEMA DE NOTIFICACIONES TOAST (Reemplazo de alert nativos) ---
+        function mostrarNotificacion(mensaje, tipo = 'error') {
+            const toast = document.getElementById('toast-notificacion');
+            if (!toast) return;
+            toast.innerText = mensaje;
+            toast.style.background = tipo === 'error' ? '#ed4245' : '#5865F2';
+            toast.classList.add('visible');
+            setTimeout(() => {
+                toast.classList.remove('visible');
+            }, 3000);
+        }
+
+        // --- FUNCIONES DE LOS MENÚS ---
+        function elegirHost() {
+            if (!ipcRenderer) {
+                mostrarNotificacion("La función Hostear solo está disponible en la app de escritorio (Electron).");
+                return;
+            }
+            ipcRenderer.send('iniciar-host');
+            ipcRenderer.once('host-iniciado', () => {
+                localStorage.setItem('chatServerIP', 'localhost');
+                location.reload();
+            });
+        }
+
+        function elegirJoin() {
+            ocultarTodosLosModales();
+            ipModal.style.display = 'flex';
+            ipInput.disabled = false;
+            setTimeout(() => ipInput.focus(), 100);
+        }
+
+        function guardarIP() {
+            const ip = ipInput.value.trim();
+            if (ip) {
+                localStorage.setItem('chatServerIP', ip);
+                location.reload();
+            }
+        }
+
+        function borrarIP() {
+            if (typeof enLlamada !== 'undefined' && enLlamada && typeof salirVoz === 'function') {
+                salirVoz();
+            }
+            if (socket && typeof socket.disconnect === 'function' && socket.connected) {
+                socket.disconnect();
+            }
+            localStorage.removeItem('chatServerIP');
+            location.reload();
+        }
+
+        // --- CÓDIGO DEL CHAT ---
+        let salaActual = 'General';
+        let usuario = '';
+
         // Login
         formLogin.addEventListener('submit', (e) => {
             e.preventDefault();
-            if (inputUsuario.value.trim()) {
-                usuario = inputUsuario.value.trim();
-                loginScreen.style.display = 'none';
-                socket.connect();
-                socket.emit('unirseSala', { sala: salaActual, nombre: usuario });
+            console.log("🚀 [FORM-LOGIN SUBMITTED] valor del input:", inputUsuario.value);
+            const nombre = inputUsuario.value.trim();
+            if (nombre) {
+                usuario = nombre;
+                console.log("✅ [LOGIN EXITO] Usuario guardado:", usuario, ". Ocultando modales.");
+                ocultarTodosLosModales();
+                document.getElementById('mensajes').innerHTML = '';
+                
+                if (socket && typeof socket.connect === 'function') {
+                    if (!socket.connected) {
+                        console.log("🔌 [SOCKET] Conectando socket...");
+                        socket.connect();
+                    } else {
+                        console.log("🔌 [SOCKET] Socket ya conectado. Emitiendo unirseSala.");
+                        socket.emit('unirseSala', { sala: salaActual, nombre: usuario });
+                    }
+                }
+                setTimeout(() => document.getElementById('input-texto')?.focus(), 100);
+            } else {
+                console.warn("⚠️ [LOGIN FALLO] El nombre está vacío.");
             }
         });
+
+        // Cerrar sesión
+        function cerrarSesion() {
+            if (typeof enLlamada !== 'undefined' && enLlamada && typeof salirVoz === 'function') {
+                salirVoz();
+            }
+            if (socket && typeof socket.disconnect === 'function' && socket.connected) {
+                socket.disconnect();
+            }
+            location.reload();
+        }
 
         // Cambiar Sala
         function cambiarSala(nuevaSala) {
@@ -174,7 +307,9 @@
             salaActual = nuevaSala;
             document.getElementById('titulo-sala').innerText = nuevaSala;
             document.getElementById('mensajes').innerHTML = '';
-            socket.emit('unirseSala', { sala: nuevaSala, nombre: usuario });
+            if (usuario && socket && typeof socket.emit === 'function') {
+                socket.emit('unirseSala', { sala: nuevaSala, nombre: usuario });
+            }
         }
 
         // Enviar Mensaje
@@ -183,7 +318,7 @@
 
         formMensaje.addEventListener('submit', (e) => {
             e.preventDefault();
-            if (inputTexto.value) {
+            if (inputTexto.value && usuario && socket && typeof socket.emit === 'function') {
                 socket.emit('mensajeChat', { sala: salaActual, usuario: usuario, texto: inputTexto.value });
                 inputTexto.value = '';
             }
@@ -206,31 +341,52 @@
         }
 
         // Eventos de Socket (Chat)
-        socket.on('mensajeChat', (msg) => pintarMensaje(msg));
-        socket.on('historialSala', (lista) => lista.forEach(msg => pintarMensaje(msg)));
+        function inicializarSocketEventos() {
+            if (!socket || typeof socket.on !== 'function') return;
 
-        socket.on('actualizarUsuarios', (listaNombres) => {
-            const contenedor = document.getElementById('lista-usuarios');
-            document.getElementById('contador-usuarios').innerText = listaNombres.length;
-            contenedor.innerHTML = '';
-            listaNombres.forEach(nombre => {
-                const item = document.createElement('div');
-                item.className = 'usuario-item';
+            socket.off('connect');
+            socket.off('connect_error');
+            socket.off('mensajeChat');
+            socket.off('historialSala');
+            socket.off('actualizarUsuarios');
 
-                //ID único para encontrar al usuario
-                item.id = `user-${nombre}`;
-                
-                const inicial = nombre.charAt(0).toUpperCase();
-                item.innerHTML = `
-                    <div class="avatar-wrapper">
-                        <div class="avatar-circle">${inicial}</div>
-                        <div class="status-dot"></div>
-                    </div>
-                    <div class="nombre-usuario">${nombre}</div>
-                `;
-                contenedor.appendChild(item);
+            socket.on('connect', () => {
+                console.log('✅ [SOCKET CONECTADO CON ÉXITO] ID:', socket.id);
+                if (usuario) {
+                    socket.emit('unirseSala', { sala: salaActual, nombre: usuario });
+                }
             });
-        });
+
+            socket.on('connect_error', (err) => {
+                console.error('❌ [SOCKET ERROR DE CONEXIÓN]:', err);
+            });
+
+            socket.on('mensajeChat', (msg) => pintarMensaje(msg));
+            socket.on('historialSala', (lista) => {
+                document.getElementById('mensajes').innerHTML = '';
+                lista.forEach(msg => pintarMensaje(msg));
+            });
+
+            socket.on('actualizarUsuarios', (listaNombres) => {
+                const contenedor = document.getElementById('lista-usuarios');
+                document.getElementById('contador-usuarios').innerText = listaNombres.length;
+                contenedor.innerHTML = '';
+                listaNombres.forEach(nombre => {
+                    const item = document.createElement('div');
+                    item.className = 'usuario-item';
+                    item.id = `user-${nombre}`;
+                    const inicial = nombre.charAt(0).toUpperCase();
+                    item.innerHTML = `
+                        <div class="avatar-wrapper">
+                            <div class="avatar-circle">${inicial}</div>
+                            <div class="status-dot"></div>
+                        </div>
+                        <div class="nombre-usuario">${nombre}</div>
+                    `;
+                    contenedor.appendChild(item);
+                });
+            });
+        }
     </script>
 
     <script src="audio_script.js"></script>

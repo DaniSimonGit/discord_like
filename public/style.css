@@ -22,7 +22,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 1000;
+    z-index: 50000;
 }
 
 .login-box {
@@ -63,36 +63,48 @@ body {
 
 /* BARRA LATERAL IZQUIERDA (SALAS) */
 #sidebar {
-    width: 240px;
+    width: 220px;
     background: #202225;
     display: flex;
     flex-direction: column;
     padding-top: 10px;
     flex-shrink: 0;
+    box-sizing: border-box;
+    transition: width 0.2s ease;
+    overflow-x: hidden;
 }
 
 .titulo-app {
-    padding: 15px;
+    padding: 12px 10px;
     font-weight: bold;
     text-transform: uppercase;
-    font-size: 14px;
+    font-size: 13px;
     color: #8e9297;
     text-align: center;
     border-bottom: 1px solid #2f3136;
     margin-bottom: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: 0.5px;
 }
 
 .btn-sala {
     background: transparent;
     border: none;
     color: #96989d;
-    padding: 10px 20px;
+    padding: 10px 14px;
     cursor: pointer;
     text-align: left;
-    font-size: 16px;
+    font-size: 15px;
     display: flex;
     align-items: center;
     width: 100%;
+    box-sizing: border-box;
+    border-radius: 4px;
+    margin: 2px 0;
+    transition: background 0.2s, color 0.2s;
+    min-width: 0;
 }
 
 .btn-sala:hover {
@@ -110,6 +122,16 @@ body {
     color: #7289da;
     margin-right: 8px;
     font-weight: bold;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.nombre-sala {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
 }
 
 /* LAYOUT CENTRAL */
@@ -295,46 +317,159 @@ header {
     border-radius: 4px;
 }
 
-/* MEDIA QUERIES (Móvil) */
+/* CONTROLES DE AUDIO (BARRA INFERIOR DE SIDEBAR) */
+#audio-controls {
+    padding: 10px;
+    background: #292b2f;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: auto;
+    border-top: 1px solid #202225;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+#btn-voz {
+    width: 100%;
+    background: #3ba55c;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.2s, filter 0.2s;
+    box-sizing: border-box;
+}
+
+#btn-voz:hover {
+    filter: brightness(1.15);
+}
+
+.audio-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.audio-actions button {
+    flex: 1;
+    height: 36px;
+    background: #2f3136;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    padding: 0;
+    transition: background 0.2s, filter 0.2s;
+}
+
+.audio-actions button:hover {
+    background: #393c43;
+    filter: brightness(1.15);
+}
+
+/* MEDIA QUERIES (Móvil y pantallas estrechas) */
 @media (max-width: 768px) {
     #users-sidebar {
         display: none;
     }
 
     #sidebar {
-        width: 60px;
-        align-items: center;
+        width: 140px;
+        align-items: stretch;
     }
 
     .titulo-app {
-        display: none;
-    }
-
-    .btn-sala span:not(.hash) {
-        display: none;
+        font-size: 11px;
+        padding: 8px 4px;
     }
 
     .btn-sala {
-        justify-content: center;
-        padding: 15px 0;
+        padding: 8px 8px;
+        font-size: 13px;
     }
 
     .hash {
-        margin: 0;
-        font-size: 24px;
+        font-size: 15px;
+        margin-right: 4px;
+    }
+
+    .nombre-sala {
+        font-size: 13px;
+    }
+
+    #audio-controls {
+        padding: 6px 4px;
+        align-items: center;
+    }
+
+    .btn-voz-texto {
+        font-size: 11px;
+    }
+
+    #btn-voz {
+        padding: 6px 4px;
+        font-size: 12px;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .audio-actions {
+        flex-direction: row;
+        gap: 4px;
+        width: 100%;
+    }
+
+    .audio-actions button {
+        height: 30px;
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    #sidebar {
+        width: 115px;
+    }
+
+    .btn-sala {
+        padding: 6px 4px;
+        font-size: 11px;
+    }
+
+    .hash {
+        font-size: 13px;
+        margin-right: 2px;
+    }
+
+    .nombre-sala {
+        font-size: 11px;
+    }
+
+    .btn-voz-texto {
+        display: none;
+    }
+
+    .audio-actions button {
+        height: 28px;
+        font-size: 13px;
     }
 }
 
 /* ESTADO ACTIVADO (ROJO) PARA BOTONES DE AUDIO */
 .btn-rojo {
     background-color: #ed4245 !important;
-    /* Rojo Discord */
     color: white !important;
-}
-
-/* Efecto hover suave */
-#audio-controls button:hover {
-    filter: brightness(1.2);
 }
 
 /* EFECTO DE HABLAR (Halo Verde) */
@@ -342,4 +477,28 @@ header {
     box-shadow: 0 0 0 2px #3ba55c, 0 0 10px #3ba55c; /* Borde sólido + Resplandor */
     transition: all 0.1s; /* Transición rápida */
     transform: scale(1.05); /* Pequeño "pop" al hablar */
+}
+
+/* NOTIFICACIONES TOAST (Sustituto de alert nativo) */
+.toast-notificacion {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: #ed4245;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 14px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    z-index: 100000;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    pointer-events: none;
+}
+
+.toast-notificacion.visible {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
 }

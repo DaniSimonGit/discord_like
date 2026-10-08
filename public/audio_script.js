@@ -73,7 +73,7 @@ function toggleVoz() {
 function unirseVoz() {
     // SEGURO: Si no hay IP, avisamos y no intentamos conectar
     if (!savedIP) {
-        alert("Falta la IP del servidor. Configúrala en la pantalla principal.");
+        if (typeof mostrarNotificacion === 'function') mostrarNotificacion("Falta la IP del servidor. Configúrala en la pantalla principal.");
         return;
     }
 
@@ -98,7 +98,7 @@ function unirseVoz() {
         socket.emit('unirse-voz-global', id);
 
         // Cambio visual del botón
-        btnVoz.innerText = "Desconectar Voz";
+        btnVoz.innerHTML = `<span class="btn-voz-icon">📵</span> <span class="btn-voz-texto">Desconectar Voz</span>`;
         btnVoz.style.background = "#ed4245"; // Rojo
         enLlamada = true;
     });
@@ -133,7 +133,7 @@ function unirseVoz() {
         });
     }).catch(err => {
         console.error("No se pudo acceder al micrófono:", err);
-        alert("Error: No se detecta micrófono. Revisa los permisos.");
+        if (typeof mostrarNotificacion === 'function') mostrarNotificacion("Error: No se detecta micrófono. Revisa los permisos.");
         salirVoz();
     });
 }
@@ -146,11 +146,11 @@ function salirVoz() {
     document.querySelectorAll('audio').forEach(a => a.remove());
 
     enLlamada = false;
-    btnVoz.innerText = "Unirse a Voz";
+    btnVoz.innerHTML = `<span class="btn-voz-icon">📞</span> <span class="btn-voz-texto">Unirse a Voz</span>`;
     btnVoz.style.background = "#3ba55c"; // Verde
 
     // Limpiamos listeners para evitar duplicados si nos reconectamos
-    socket.off('usuario-conectado-voz');
+    if (socket && typeof socket.off === 'function') socket.off('usuario-conectado-voz');
 }
 
 function conectarNuevoUsuario(userId, stream) {
@@ -192,7 +192,10 @@ function addAudioStream(audio, stream) {
 
 function toggleMicrofono() {
     // Si no estamos en llamada, no hacemos nada
-    if (!enLlamada || !myStream) return alert("Debes unirte a la voz primero.");
+    if (!enLlamada || !myStream) {
+        if (typeof mostrarNotificacion === 'function') mostrarNotificacion("Debes unirte a la voz primero.");
+        return;
+    }
 
     micEnabled = !micEnabled; // Invertir estado (true -> false)
 
@@ -303,5 +306,7 @@ function activarHalo(nombre, encender) {
 }
 
 // ESCUCHAR EVENTOS DE OTROS
-socket.on('usuario-hablando', (nombre) => activarHalo(nombre, true));
-socket.on('usuario-callado', (nombre) => activarHalo(nombre, false));
+if (typeof socket !== 'undefined' && socket && typeof socket.on === 'function') {
+    socket.on('usuario-hablando', (nombre) => activarHalo(nombre, true));
+    socket.on('usuario-callado', (nombre) => activarHalo(nombre, false));
+}

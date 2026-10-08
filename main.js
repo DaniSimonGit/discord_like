@@ -1,35 +1,30 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 
-// 1. IMPORTAR E INICIAR EL SERVIDOR
-// Al hacer require, node ejecuta el código de server.js inmediatamente.
-// Esto levanta el servidor en el puerto 3000 en segundo plano.
-require('./server.js'); 
+// Mantenemos tu parche de seguridad para el micrófono en ZeroTier
 app.commandLine.appendSwitch('unsafely-treat-insecure-origin-as-secure', 'http://10.222.195.2:3000');
 
+// Variable para no encender el servidor dos veces por accidente
+let servidorIniciado = false;
+
 function createWindow() {
-    // 2. CREAR LA VENTANA
     const win = new BrowserWindow({
         width: 1000,
         height: 800,
         title: "Mi Discord Local",
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false, // Para facilitar prototipado rápido
-            // En producción, esto debería ser true y usar preload scripts
+            contextIsolation: false, // Vital para que nuestro HTML pueda hablar con Node.js
         },
-        autoHideMenuBar: true, // Ocultar la barra de menú clásica
-        icon: path.join(__dirname, 'icon.png') // (Opcional si tienes icono)
+        autoHideMenuBar: true,
+        icon: path.join(__dirname, 'icon.png') 
     });
 
-    // 3. CARGAR LA UI
-    // Importante: No cargamos 'index.html' como archivo local (file://),
-    // sino que nos conectamos a nuestro propio servidor local.
-    // Esto asegura que la experiencia sea idéntica a la de tus amigos.
-    win.loadURL('http://localhost:3000');
+    // 1. EL CAMBIO CLAVE: Cargamos el archivo físico, no una URL.
+    // Así la ventana se abre siempre, esté el servidor encendido o apagado.
+    win.loadFile(path.join(__dirname, 'public', 'index.html'));
     
-    // Abrir herramientas de desarrollo (F12)
-    // win.webContents.openDevTools(); 
+    win.webContents.openDevTools(); 
 }
 
 app.whenReady().then(createWindow);
@@ -44,9 +39,34 @@ app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
     }
+});
 
-    event.preventDefault();
-  callback(true); // Solo para desarrollo
+const os = require('os');
 
-    
+// 2. EL INTERRUPTOR MÁGICO (Cerebro Node.js)
+// Escuchamos la señal que nos mandará el HTML cuando pulses "Hostear"
+ipcMain.on('iniciar-host', (event) => {
+    if (!servidorIniciado) {
+        console.log("Orden recibida: Encendiendo el servidor local...");
+        require('./server.js'); // Encendemos la discoteca
+        servidorIniciado = true;
+        // Le avisamos al HTML de que ya está listo
+        event.reply('host-iniciado', 'ok');
+    } else {
+        event.reply('host-iniciado', 'ok');
+    }
+});
+
+// Obtener IPs locales (LAN / ZeroTier / VPN) para mostrarlas al Host
+ipcMain.on('obtener-ips-host', (event) => {
+    const interfaces = os.networkInterfaces();
+    const ips = [];
+    for (const name in interfaces) {
+        for (const net of interfaces[name]) {
+            if (net.family === 'IPv4' && !net.internal) {
+                ips.push({ interface: name, ip: net.address });
+            }
+        }
+    }
+    event.reply('ips-host-obtenidas', ips);
 });
