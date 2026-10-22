@@ -1,0 +1,260 @@
+===============================================================================
+             DISCORD_LIKE - CONTEXTO DE ARQUITECTURA Y SISTEMA (IA)
+===============================================================================
+[METADATA]
+PROJECT: Discord_like (Electron + Express + Socket.io + PeerJS WebRTC)
+LAST_UPDATED: 2026-10-22
+FORMAT_VERSION: 1.0.0
+PURPOSE: Referencia arquitectónica exhaustiva y estructurada para consumo rápido por modelos de IA y agentes de código.
+
+-------------------------------------------------------------------------------
+                            1. ÍNDICE DE NAVEGACIÓN RÁPIDA
+-------------------------------------------------------------------------------
+| SECCIÓN | COMPONENTE                | PALABRAS CLAVE                                  |
+|---------|---------------------------|-------------------------------------------------|
+| SEC-01  | Visión General y Stack    | Electron, Express, Socket.io, PeerJS, Puertos   |
+| SEC-02  | Mapa de Archivos          | main.js, server.js, index.html, audio_script.js |
+| SEC-03  | Arquitectura de Procesos  | Main Process, Renderer, IPC, Host vs Cliente    |
+| SEC-04  | Contratos de Red (IPC/WS) | Eventos IPC, Socket.io Events, PeerJS Signaling |
+| SEC-05  | Flujos Funcionales        | Roles, Login, Chat, Salas, Voz WebRTC, VAD      |
+| SEC-06  | Estado del Cliente y DOM  | Variables Globales, localStorage, IDs de DOM    |
+| SEC-07  | Invariantes y Reglas IA   | Restricciones críticas para futuras ediciones   |
+
+===============================================================================
+                       SEC-01: VISIÓN GENERAL Y STACK TÉCNICO
+===============================================================================
+[OVERVIEW]
+Aplicación de escritorio multiplataforma que replica las funciones esenciales de Discord (salas de chat de texto en tiempo real, canales de voz P2P de baja latencia, indicador visual de actividad de voz y lista de usuarios conectados) diseñada para funcionar en redes locales (LAN) o VPNs (ZeroTier / Tailscale / Radmin).
+
+[TECH_STACK]
+- Runtime & Shell: Electron (`^29.1.0`) + Node.js (empaquetado con `@electron-forge/cli`).
+- Servidor HTTP y Señalización:
+  - Express (`^4.18.2`): Sirve archivos estáticos de `public/` en el puerto `3000` (`0.0.0.0`).
+  - Socket.io (`^4.7.4`): Transporte WebSocket para salas de texto, presencia de usuarios, señalización de entrada a voz y estados de habla (halo verde) en el puerto `3000`.
+  - PeerServer (`peer ^1.0.2`): Servidor de señalización WebRTC independiente ejecutándose en el puerto `3001` (`path: '/'`).
+- Cliente / Frontend:
+  - HTML5 + CSS3 Vanilla (`public/index.html`, `public/style.css`).
+  - Lógica de Chat y Red: Script inline en `public/index.html`.
+  - Lógica de Voz WebRTC y Detector de Audio (VAD): `public/audio_script.js`.
+  - Librerías cliente locales (sin SourceMaps para evitar errores 404): `public/socket.io.min.js`, `public/peerjs.min.js`.
+
+===============================================================================
+                           SEC-02: MAPA DE ARCHIVOS
+===============================================================================
+| ARCHIVO                  | ROL ARQUITECTÓNICO                                                  |
+|--------------------------|---------------------------------------------------------------------|
+| `package.json`           | Configuración de dependencias y scripts de Electron Forge (`start`, `package`, `make`). |
+| `main.js`                | Proceso Principal de Electron. Crea `BrowserWindow`, gestiona IPC (`iniciar-host`, `obtener-ips-host`) y arranca `server.js` bajo demanda. |
+| `server.js`              | Backend Node.js. Levanta Express + Socket.io en `0.0.0.0:3000` y `PeerServer` en `:3001`. Mantiene en memoria `historialMensajes` y `usuariosConectados`. |
+| `public/index.html`      | Interfaz de usuario (modales de Rol/IP/Login/Ajustes, Sidebar, Chat, Lista de Usuarios), aislamiento UMD y controlador JS de conexión/chat. |
+| `public/audio_script.js` | Controlador de WebRTC (`PeerJS`), captura `getUserMedia`, enrutamiento de dispositivos de entrada/salida, Mute/Deafen y detección de voz con `AudioContext`. |
+| `public/style.css`       | Sistema de estilos estilo Discord oscuro, layout flexbox responsivo, media queries, estados `.btn-rojo`, `.hablando` (halo verde) y `.toast-notificacion`. |
+| `docs/errores.txt`       | Base de conocimientos de errores históricos, causas raíz y reglas de prevención. |
+| `docs/manual.txt`        | Manual de usuario final para ejecución, conexión por LAN/VPN y empaquetado `.exe`. |
+| `docs/contexto_ia.txt`   | Este documento. Especificación técnica integral para modelos de IA. |
+
+===============================================================================
+                    SEC-03: ARQUITECTURA DE PROCESOS Y EJECUCIÓN
+===============================================================================
+[ELECTRON_MAIN_PROCESS] (`main.js`)
+- Configura `BrowserWindow` con `nodeIntegration: true` y `contextIsolation: false` para permitir el acceso directo a `require('electron').ipcRenderer` desde el cliente.
+- NO usa el flag `unsafely-treat-insecure-origin-as-secure` (antes estaba fijado a `http://10.222.195.2:3000`, la IP de ZeroTier del Host). Es innecesario: la UI se carga desde `file://`, que Chromium trata como contexto seguro, por lo que `getUserMedia` funciona sea cual sea la IP del servidor a la que se conecten Socket.io/PeerJS.
+- Carga `public/index.html` directamente mediante `win.loadFile(...)` (en la versión con selector de Host) para que la UI esté disponible antes de decidir si el usuario será Host o Cliente.
+- Mantiene el flag booleano `servidorIniciado` para garantizar que `require('./server.js')` se ejecute como máximo una vez por ciclo de vida de la aplicación.
+
+[SERVER_PROCESS] (`server.js`)
+- Se ejecuta embebido dentro del mismo proceso Node.js de Electron cuando se requiere `server.js`.
+- Escucha en `0.0.0.0:3000` (todas las interfaces IPv4: localhost, LAN Wi-Fi/Ethernet y adaptadores virtuales ZeroTier/VPN).
+- Configura CORS abierto (`origin: "*"`) en Socket.io para permitir conexiones desde cualquier IP de la red local o VPN.
+- Levanta `PeerServer({ port: 3001, path: '/' })` para coordinar los apretones de manos (handshakes) WebRTC.
+
+[RENDERER_PROCESS] (`public/index.html` + `public/audio_script.js`)
+- Aísla `window.module` antes de cargar `socket.io.min.js` y `peerjs.min.js` para evitar que el sistema UMD detecte el entorno CommonJS de Electron y oculte `window.io` y `window.Peer`.
+- Determina el modo de operación leyendo `localStorage.getItem('chatServerIP')`:
+  1. Sin IP (`null`): Muestra `#role-modal` (Elegir entre "Hostear Servidor" o "Unirse al Servidor") e instancia un objeto `socket` simulado (no-op) para evitar errores de referencia.
+  2. Con `chatServerIP === 'localhost'`: Solicita al proceso principal vía IPC que arranque el servidor (`iniciar-host`) y obtenga las IPs locales (`obtener-ips-host`) para mostrarlas en `#host-ip-banner`.
+  3. Con `chatServerIP === '<IP_REMOTA>'`: Se comporta como cliente puro apuntando a `http://<IP_REMOTA>:3000` (Socket.io) y `<IP_REMOTA>:3001` (PeerJS).
+
+===============================================================================
+                  SEC-04: CONTRATOS DE RED (IPC, SOCKET.IO, PEERJS)
+===============================================================================
+
+-------------------------------------------------------------------------------
+4.1. COMUNICACIÓN IPC (Electron Renderer <-> Electron Main)
+-------------------------------------------------------------------------------
+| CANAL IPC            | DIRECCIÓN         | PAYLOAD / FORMATO                       | DESCRIPCIÓN |
+|----------------------|-------------------|-----------------------------------------|-------------|
+| `iniciar-host`       | Renderer -> Main  | Ninguno                                 | Ordena ejecutar `require('./server.js')` si no estaba iniciado. |
+| `host-iniciado`      | Main -> Renderer  | `'ok'` (string)                         | Confirma que el backend Express/Socket.io/PeerServer está activo. |
+| `obtener-ips-host`   | Renderer -> Main  | Ninguno                                 | Solicita el listado de interfaces IPv4 externas del sistema (`os.networkInterfaces()`). |
+| `ips-host-obtenidas` | Main -> Renderer  | `Array<{ interface: string, ip: string }>` | Devuelve las IPs locales y de VPN para pintarlas en `#host-ip-banner`. |
+
+-------------------------------------------------------------------------------
+4.2. EVENTOS SOCKET.IO (Puerto 3000)
+-------------------------------------------------------------------------------
+A) CLIENTE -> SERVIDOR (`socket.emit`):
+- `unirseSala`
+  - Payload: `{ sala: string, nombre: string }`
+  - Acción en Servidor: Si el `socket.id` ya estaba en otra sala, ejecuta `socket.leave(salaAnterior)` y actualiza la lista de usuarios de la sala anterior. Une el socket a `sala`, registra `usuariosConectados[socket.id] = { nombre, sala }`, emite `historialSala` al cliente que acaba de entrar y emite `actualizarUsuarios` a toda la sala.
+- `mensajeChat`
+  - Payload: `{ sala: string, usuario: string, texto: string }`
+  - Acción en Servidor: Construye `{ usuario, texto, hora: 'HH:MM' }`, lo guarda en `historialMensajes[sala]` (máximo 50 mensajes por sala, FIFO con `.shift()`) y lo retransmite con `io.to(sala).emit('mensajeChat', nuevoMensaje)`.
+- `unirse-voz-global`
+  - Payload: `peerId: string` (ID asignado por PeerServer al cliente)
+  - Acción en Servidor: Retransmite a todos los demás clientes conectados (`socket.broadcast.emit('usuario-conectado-voz', peerId)`) para que inicien llamadas WebRTC hacia el nuevo participante.
+- `hablando`
+  - Payload: Ninguno
+  - Acción en Servidor: Busca el usuario por `socket.id` y emite `socket.broadcast.to(usuario.sala).emit('usuario-hablando', usuario.nombre)`.
+- `silencio`
+  - Payload: Ninguno
+  - Acción en Servidor: Busca el usuario por `socket.id` y emite `socket.broadcast.to(usuario.sala).emit('usuario-callado', usuario.nombre)`.
+- `disconnect` (Nativo de Socket.io)
+  - Acción en Servidor: Elimina `usuariosConectados[socket.id]` y emite `actualizarUsuarios` a la sala en la que se encontraba el usuario.
+
+B) SERVIDOR -> CLIENTE (`socket.on`):
+- `historialSala`
+  - Payload: `Array<{ usuario: string, texto: string, hora: string }>`
+  - Acción en Cliente: Limpia `#mensajes` y renderiza cada mensaje histórico mediante `pintarMensaje(msg)`.
+- `mensajeChat`
+  - Payload: `{ usuario: string, texto: string, hora: string }`
+  - Acción en Cliente: Añade el mensaje al final de `#mensajes` y hace auto-scroll al fondo.
+- `actualizarUsuarios`
+  - Payload: `Array<string>` (nombres de usuarios en la sala actual)
+  - Acción en Cliente: Actualiza `#contador-usuarios` y reconstruye `#lista-usuarios` creando elementos `.usuario-item` con `id="user-${nombre}"`.
+- `usuario-conectado-voz`
+  - Payload: `userId: string` (`peerId` remoto)
+  - Acción en Cliente (`audio_script.js`): Si `userId !== myPeer.id`, llama a `conectarNuevoUsuario(userId, myStream)` ejecutando `myPeer.call(userId, stream)`.
+- `usuario-hablando`
+  - Payload: `nombre: string`
+  - Acción en Cliente (`audio_script.js`): Añade la clase CSS `.hablando` al elemento `#user-${nombre}`.
+- `usuario-callado`
+  - Payload: `nombre: string`
+  - Acción en Cliente (`audio_script.js`): Elimina la clase CSS `.hablando` del elemento `#user-${nombre}`.
+
+-------------------------------------------------------------------------------
+4.3. SEÑALIZACIÓN Y FLUJO WEBRTC PEERJS (Puerto 3001)
+-------------------------------------------------------------------------------
+- Configuración de instancia:
+  ```javascript
+  myPeer = new Peer(undefined, {
+      host: savedIP,
+      port: 3001,
+      path: '/',
+      config: {
+          iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:global.stun.twilio.com:3478' }
+          ]
+      }
+  });
+  ```
+- Eventos PeerJS:
+  - `myPeer.on('open', id)`: Se dispara al registrarse en el PeerServer (`:3001`). Emite `unirse-voz-global` por Socket.io con el `id` y cambia el estado `enLlamada = true`.
+  - `myPeer.on('call', call)`: Se dispara cuando un par existente llama al usuario recién llegado. Responde con `call.answer(myStream)` y escucha `call.on('stream', ...)` para inyectar un `<audio>` en el `document.body`.
+  - `myPeer.call(userId, stream)`: Iniciado por los usuarios que ya estaban en voz cuando reciben el evento Socket.io `usuario-conectado-voz`. Almacena la referencia en `peersConectados[userId] = call`.
+
+===============================================================================
+                         SEC-05: FLUJOS FUNCIONALES CLAVE
+===============================================================================
+
+[FLOW-01: SELECCIÓN DE ROL E INICIALIZACIÓN DE IP]
+1. Al arrancar, el cliente comprueba `localStorage.getItem('chatServerIP')`.
+2. Si no existe:
+   - Se muestra `#role-modal`.
+   - Si elige **Hostear** (`elegirHost()`): Envía IPC `iniciar-host` -> recibe `host-iniciado` -> guarda `chatServerIP = 'localhost'` -> `location.reload()`.
+   - Si elige **Unirse** (`elegirJoin()`): Abre `#ip-modal` -> el usuario introduce la IP del Host -> `guardarIP()` guarda `chatServerIP = ip` -> `location.reload()`.
+3. Si existe `chatServerIP`:
+   - Se muestra `#login-screen` con foco automático en `#input-usuario`.
+   - Si es `'localhost'`, solicita al proceso principal que asegure que el servidor está corriendo y pide la lista de IPs locales para mostrar el bloque `#host-ip-banner` con botones de copiado al portapapeles (`navigator.clipboard.writeText`).
+   - Se instancia `socket = io('http://' + serverIP + ':3000', { autoConnect: false })` y se registran los listeners mediante `inicializarSocketEventos()`.
+
+[FLOW-02: LOGIN Y RECONEXIÓN AUTOMÁTICA DE SALAS]
+1. El usuario envía `#form-login` con su nombre (`usuario`).
+2. Se ocultan todos los modales (`ocultarTodosLosModales()`), se limpia `#mensajes` y se invoca `socket.connect()`.
+3. Al dispararse `socket.on('connect')`, si la variable `usuario` está definida, se emite automáticamente `socket.emit('unirseSala', { sala: salaActual, nombre: usuario })`.
+   - *Nota crítica*: Esto garantiza que ante cualquier micro-corte o reconexión de red, el cliente vuelva a registrarse automáticamente en su sala activa en el servidor.
+
+[FLOW-03: CAMBIO DE SALA Y CHAT DE TEXTO]
+1. Salas predefinidas en servidor y cliente: `'General'`, `'Juegos'`, `'Musica'`.
+2. Al pulsar un botón `.btn-sala`, `cambiarSala(nuevaSala)` actualiza la clase `.activa`, cambia `#titulo-sala`, vacía `#mensajes` y emite `unirseSala`.
+3. El servidor mueve el socket de sala, notifica la lista de usuarios actualizada a ambas salas (antigua y nueva) y devuelve los últimos 50 mensajes de la nueva sala mediante `historialSala`.
+
+[FLOW-04: CONEXIÓN A VOZ, MUTE, DEAFEN Y ENRUTAMIENTO DE AUDIO]
+1. Al pulsar `#btn-voz` (`toggleVoz()` -> `unirseVoz()`):
+   - Conecta `myPeer` al puerto `3001` de `savedIP`.
+   - Obtiene el stream de micrófono con `navigator.mediaDevices.getUserMedia({ audio: { deviceId: ... }, video: false })`.
+   - Inicia el detector de actividad de voz `iniciarDetectorVoz(stream)`.
+   - Establece los manejadores de llamadas entrantes (`myPeer.on('call')`) y salientes (`socket.on('usuario-conectado-voz')`).
+2. Cada stream remoto se reproduce en un elemento `<audio>` oculto añadido al `document.body`:
+   - Respeta el estado de ensordecimiento (`audio.muted = !audioEnabled`).
+   - Si se eligió un altavoz específico en `#audio-output`, aplica `audio.setSinkId(speakerId)`.
+3. **Mute (`toggleMicrofono`)**: Invierte `micEnabled` y desactiva/activa la pista física (`myStream.getAudioTracks()[0].enabled = micEnabled`). Aplica clase `.btn-rojo` y cambia icono entre `🎤` y `🔇`.
+4. **Deafen (`toggleAuriculares`)**: Invierte `audioEnabled` y aplica `audioTag.muted = !audioEnabled` a todas las etiquetas `<audio>` del DOM. Aplica clase `.btn-rojo` y cambia icono entre `🎧` y `🙉`.
+5. **Desconexión (`salirVoz`)**: Destruye `myPeer`, detiene las pistas de `myStream` (`track.stop()`), elimina todos los `<audio>` del DOM, restaura el estilo verde de `#btn-voz` y desuscribe `socket.off('usuario-conectado-voz')`.
+
+[FLOW-05: DETECCIÓN DE ACTIVIDAD DE VOZ (VAD - HALO VERDE)]
+1. `iniciarDetectorVoz(stream)` crea un `AudioContext`, un `AnalyserNode` (`smoothingTimeConstant = 0.3`, `fftSize = 1024`) y un `ScriptProcessorNode` (`2048`).
+2. En cada ciclo de `onaudioprocess`, calcula el promedio de frecuencias (`getByteFrequencyData`).
+3. Si el volumen promedio supera el umbral (`umbral = 10`) y `!hablandoActualmente`:
+   - Marca `hablandoActualmente = true`, ilumina el avatar propio (`iluminarYo(true)`) y emite `socket.emit('hablando')`.
+4. Si el volumen baja del umbral y `hablandoActualmente`:
+   - Marca `hablandoActualmente = false`, apaga el avatar propio (`iluminarYo(false)`) y emite `socket.emit('silencio')`.
+5. `activarHalo(nombre, encender)` busca `#user-${nombre}` en la barra derecha de usuarios y alterna la clase `.hablando` (que aplica `box-shadow: 0 0 0 2px #3ba55c, 0 0 10px #3ba55c` y `transform: scale(1.05)` sobre `.avatar-circle`).
+
+===============================================================================
+                    SEC-06: ESTADO DEL CLIENTE, SERVIDOR Y DOM
+===============================================================================
+
+[SERVER_MEMORY_STATE] (`server.js`)
+- `historialMensajes`: Objeto `{ 'General': [], 'Juegos': [], 'Musica': [] }`. Cada elemento es `{ usuario: string, texto: string, hora: string }`. Límite: 50 mensajes por sala.
+- `usuariosConectados`: Diccionario indexado por `socket.id` -> `{ nombre: string, sala: string }`.
+
+[CLIENT_PERSISTENT_STATE] (`localStorage`)
+- `localStorage.getItem('chatServerIP')`: Almacena `'localhost'` (modo Host) o la dirección IPv4 del servidor (modo Cliente).
+
+[CLIENT_RUNTIME_STATE]
+- En `public/index.html`:
+  - `serverIP`: String con la IP leída de `localStorage`.
+  - `socket`: Instancia activa de Socket.io client (o mock no-op si aún no hay IP).
+  - `salaActual`: String con la sala activa (por defecto `'General'`).
+  - `usuario`: String con el nombre del usuario autenticado.
+- En `public/audio_script.js`:
+  - `savedIP`: Copia de `chatServerIP` al cargar el script.
+  - `myPeer`: Instancia de `Peer` (PeerJS).
+  - `myStream`: `MediaStream` local del micrófono.
+  - `peersConectados`: Diccionario `{ [peerId]: MediaConnection }`.
+  - `enLlamada`: Booleano que indica si el usuario está conectado al canal de voz.
+  - `micEnabled`: Booleano de estado del micrófono (`true` = activo, `false` = muteado).
+  - `audioEnabled`: Booleano de estado de salida de audio (`true` = activo, `false` = ensordecido).
+  - `hablandoActualmente`: Booleano de estado del detector de voz (VAD).
+
+[DOM_IDENTIFIERS_MAP]
+- Modales y Notificaciones:
+  - `#toast-notificacion`: Contenedor fijo superior para alertas no bloqueantes.
+  - `#role-modal`: Selector inicial entre Hostear (`elegirHost()`) o Unirse (`elegirJoin()`).
+  - `#ip-modal`, `#ip-input`: Configuración manual de IP del servidor.
+  - `#login-screen`, `#form-login`, `#input-usuario`: Pantalla de entrada de nombre de usuario (`z-index: 50000`).
+  - `#settings-modal`, `#audio-input`, `#audio-output`: Selector de micrófono y altavoces.
+- Barra Lateral Izquierda (`#sidebar`):
+  - `#host-ip-banner`, `#host-ip-list`: Panel que muestra las IPs detectadas cuando se actúa como Host.
+  - `.btn-sala`, `.nombre-sala`: Botones de cambio de canal (`#General`, `#Juegos`, `#Música`).
+  - `#audio-controls`: Contenedor inferior en 2 filas:
+    - Fila 1: `#btn-voz` (`.btn-voz-icon`, `.btn-voz-texto`).
+    - Fila 2 (`.audio-actions`): Botón cambiar servidor (`🌐`), `#btn-micro` (`🎤`/`🔇`), `#btn-audio` (`🎧`/`🙉`), botón ajustes (`⚙️`).
+- Área Central (`#main-content`):
+  - `#chat-area`, `#titulo-sala`, `#mensajes`, `#form-mensaje`, `#input-texto`.
+  - `#users-sidebar`, `#contador-usuarios`, `#lista-usuarios`, `#user-<nombre>`.
+
+===============================================================================
+              SEC-07: INVARIANTES Y REGLAS CRÍTICAS PARA AGENTES IA
+===============================================================================
+1. [NO_NATIVE_DIALOGS]: NUNCA utilizar `window.alert()`, `window.confirm()` ni `window.prompt()` en ningún archivo del cliente. En Electron sobre Windows corrompen el foco nativo Win32 (`RenderWidgetHostViewWin`) y bloquean la escritura en `<input>`. Usar siempre `mostrarNotificacion(mensaje, tipo)`.
+2. [UMD_ISOLATION]: En `public/index.html`, mantener siempre el bloque que guarda `window.module` en una variable temporal y asigna `module = undefined` antes de cargar `socket.io.min.js` y `peerjs.min.js`.
+3. [SOCKET_RECONNECT_RESILIENCE]: Cualquier estado de suscripción en el servidor (como `unirseSala`) debe emitirse dentro de `socket.on('connect', ...)` para sobrevivir reconexiones automáticas de Socket.io.
+4. [VOICE_IS_GLOBAL]: El canal de voz (`unirse-voz-global`) es único y global para todo el servidor (independiente de la sala de texto `#General`, `#Juegos` o `#Música` en la que esté el usuario), aunque el evento visual `hablando`/`silencio` se emite a la sala actual del usuario (`socket.broadcast.to(usuario.sala)`).
+5. [DOM_USER_ID_CONVENTION]: Los elementos de la lista de usuarios deben mantener el formato `id="user-${nombre}"` porque `activarHalo(nombre, encender)` en `audio_script.js` depende de ese selector exacto para encender el halo verde de voz.
+6. [NO_HARDCODED_IPS]: No fijar IPs concretas en el código (`main.js`, flags de Chromium, etc.). La IP del servidor es dinámica (`localStorage.chatServerIP`). Si en el futuro la UI se cargara desde una URL `http://<IP>` en vez de `file://`, el micrófono dejaría de funcionar y habría que resolverlo de forma dinámica, no con una IP fija.
+===============================================================================
+                          FIN DEL DOCUMENTO DE CONTEXTO IA
+===============================================================================
+

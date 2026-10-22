@@ -1,8 +1,9 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 
-// Mantenemos tu parche de seguridad para el micrófono en ZeroTier
-app.commandLine.appendSwitch('unsafely-treat-insecure-origin-as-secure', 'http://10.222.195.2:3000');
+// No hace falta 'unsafely-treat-insecure-origin-as-secure' para el micrófono:
+// la UI se carga con loadFile (origen file://), que Chromium ya considera seguro,
+// aunque Socket.io/PeerJS se conecten luego por HTTP a la IP del Host (LAN/ZeroTier/VPN).
 
 // Variable para no encender el servidor dos veces por accidente
 let servidorIniciado = false;
