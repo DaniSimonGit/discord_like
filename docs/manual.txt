@@ -72,6 +72,11 @@ B) 🤝 UNIRSE AL SERVIDOR (Ser Cliente)
   - 🎤 Mutear Micrófono
   - 🎧 Ensordecer (Mutear audio entrante)
   - ⚙️ Ajustes de entrada/salida de audio
+  - 🎙️ Probar micrófono (en ⚙️ Ajustes): te escuchas a ti mismo tal y como te
+    oirán los demás. Úsalo con cascos; es normal un ligero eco por el retardo.
+- FILTRO DE RUIDO (RNNoise): elimina el ruido de fondo constante (ventiladores,
+  zumbidos) y atenúa teclado y golpes. Los ruidos fuertes y cortos, como las
+  palmadas, se reducen pero pueden seguir oyéndose.
 - 🚪 SALIR: Botón en la cabecera del chat para cerrar sesión limpiamente.
 - 🌐 SERVIDORES: Botón en la barra de audio para cambiar de IP o modo de servidor.
 

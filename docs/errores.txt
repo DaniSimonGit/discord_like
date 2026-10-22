@@ -19,6 +19,9 @@ PURPOSE: Base de conocimientos para diagnóstico rápido y contexto de IA.
 | ERR-005 | Layout / CSS   | audio-controls cortados, sidebar   | public/index.html, style.css       |
 | ERR-006 | Red / Host     | IP local, VPN, conectar otro PC    | main.js, public/index.html         |
 | ERR-007 | Entorno        | require is not defined, navegador  | public/index.html                  |
+| ERR-008 | Audio / Ruido  | palmadas, teclado, filtro nativo   | public/audio_script.js             |
+| ERR-009 | Audio / Prueba | voz cortada, metálica, eco, doble  | public/audio_script.js             |
+| ERR-010 | Electron file: | fetch, addModule, file://, wasm    | public/audio_script.js             |
 
 ===============================================================================
                           DETALLE DE ERRORES Y SOLUCIONES
@@ -172,6 +175,63 @@ PURPOSE: Base de conocimientos para diagnóstico rápido y contexto de IA.
   ```
 [PREVENTION_RULE]:
   - Todo acceso a APIs de Node/Electron desde el Renderer debe comprobar antes `typeof require !== 'undefined'` y tolerar `ipcRenderer === null`.
+
+---
+[ID]: ERR-008
+[DATE]: 2026-10-23
+[COMPONENTS]: public/audio_script.js, scripts/copiar-rnnoise.js, public/vendor/rnnoise/
+[SYMPTOMS]:
+  - Con `noiseSuppression: true` en `getUserMedia`, el ruido constante desaparece pero las palmadas, el teclado y los golpes se siguen oyendo con claridad.
+[LOG_OR_BEHAVIORAL_SIGNATURE]:
+  Sin error en consola. Comportamiento audible: los ruidos impulsivos pasan el filtro nativo.
+[ROOT_CAUSE_DIAGNOSIS]:
+  - El filtro nativo de Chromium (WebRTC) está diseñado para ruido estacionario (ventiladores, zumbidos). Los transitorios cortos y fuertes se parecen al ataque de la voz y no se filtran.
+  - Además, `noiseSuppression`, `echoCancellation` y `autoGainControl` ya vienen activados por defecto en Chromium, así que declararlos no cambia el sonido.
+[SOLUTION]:
+  - Se añadió RNNoise (`@sapphi-red/web-noise-suppressor`) como `AudioWorkletNode` entre el micrófono y PeerJS (`obtenerMicrofono` -> `crearFiltroRuido`). El `noiseSuppression` nativo se desactiva para no procesar la voz dos veces y solo se usa como respaldo si RNNoise no carga.
+  - Medido en Electron: ruido tipo ventilador eliminado (pico 0,203 -> 0,005); palmadas simuladas reducidas al ~26% de energía (-6 dB) pero todavía audibles.
+[PREVENTION_RULE]:
+  - No esperar que ningún supresor de ruido gratuito (nativo o RNNoise) elimine por completo ruidos impulsivos. Para eliminarlos del todo, la vía es "pulsar para hablar".
+  - Tras actualizar `@sapphi-red/web-noise-suppressor`, ejecutar `npm run vendor:rnnoise` para regenerar `public/vendor/rnnoise/`.
+
+---
+[ID]: ERR-009
+[DATE]: 2026-10-23
+[COMPONENTS]: public/audio_script.js
+[SYMPTOMS]:
+  - En la prueba de micrófono (`🎙️ Probar micrófono`) la propia voz se oía cortada y metálica.
+  - Tras añadir RNNoise, la prueba sonaba "con eco": la voz duplicada, y a veces la prueba no se podía detener.
+[LOG_OR_BEHAVIORAL_SIGNATURE]:
+  Sin error en consola. Voz entrecortada al escucharse uno mismo; voz duplicada tras pulsar el botón varias veces.
+[ROOT_CAUSE_DIAGNOSIS]:
+  - Voz cortada: con `echoCancellation: true`, el cancelador de eco ve la misma voz entrando por el micro y saliendo por los cascos, la interpreta como eco y la recorta.
+  - Voz duplicada: `togglePruebaMicro()` es asíncrona y RNNoise tarda un momento en cargar. Un doble clic arrancaba dos pruebas en paralelo; la primera quedaba huérfana (sin referencia) y no se podía detener.
+  - Un ligero eco único es normal: el pipeline añade unas decenas de ms y se percibe como "slapback" al oírse a uno mismo. No afecta a la llamada.
+[SOLUTION]:
+  - La prueba llama a `obtenerMicrofono(micId, false)` (sin cancelación de eco). La llamada real la mantiene activa.
+  - Flag `pruebaCargando` que ignora clics mientras carga, y si `#settings-modal` se cerró durante la carga, la prueba se detiene al terminar.
+[PREVENTION_RULE]:
+  - Hacer la prueba de micrófono siempre con cascos (sin cancelación de eco, los altavoces provocan realimentación).
+  - Toda acción asíncrona disparada por un botón debe protegerse contra dobles clics y contra el cierre de su UI mientras carga.
+
+---
+[ID]: ERR-010
+[DATE]: 2026-10-23
+[COMPONENTS]: public/audio_script.js
+[SYMPTOMS]:
+  - Riesgo identificado al integrar RNNoise: la UI se carga con `loadFile` (`file://`) y la librería espera cargar el `.wasm` con `fetch()` y el worklet con `audioWorklet.addModule(url)`.
+[LOG_OR_BEHAVIORAL_SIGNATURE]:
+  Error esperado si se usara `fetch()` (prevenido, no llegó a producirse en este proyecto):
+  "Fetch API cannot load file:///.../rnnoise.wasm. URL scheme "file" is not supported."
+[ROOT_CAUSE_DIAGNOSIS]:
+  - `fetch()` de Chromium no admite el esquema `file://`. La carga de módulos de worklet tampoco es fiable desde `file://`.
+[SOLUTION]:
+  - Los ficheros se leen con `XMLHttpRequest` (`cargarArchivo`), que sí funciona en `file://` (status 0 = correcto).
+  - El código del worklet se carga como texto y se registra con `addModule()` a través de una URL `Blob` (`URL.createObjectURL`).
+  - No se usan `loadRnnoise` ni `RnnoiseWorkletNode` de la librería; se crea `new AudioWorkletNode(ctx, '@sapphi-red/web-noise-suppressor/rnnoise', ...)` directamente.
+  - Verificado con una prueba automática en Electron 29 sin ventana: carga en ~17 ms usando la versión SIMD.
+[PREVENTION_RULE]:
+  - En el Renderer de esta app (servido desde `file://`), no usar `fetch()` para recursos locales: usar `XMLHttpRequest` o URLs `Blob`.
 
 ===============================================================================
                           FIN DEL REGISTRO DE ERRORES

@@ -5,7 +5,8 @@
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "vendor:rnnoise": "node scripts/copiar-rnnoise.js"
   },
   "keywords": [],
   "author": "Dani",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@electron-forge/cli": "^7.3.0",
     "@electron-forge/maker-zip": "^7.3.0",
+    "@sapphi-red/web-noise-suppressor": "^0.4.1",
     "electron": "^29.1.0"
   },
   "config": {
