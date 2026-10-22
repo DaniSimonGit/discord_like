@@ -89,5 +89,18 @@ en los ordenadores de tus amigos):
    empaquetada en un archivo `.zip`.
 3. Tus amigos solo tendrán que descomprimir el archivo y hacer doble clic sobre 
    `discord_like.exe`.
-===============================================================================
 
+
+8. RESOLUCIÓN DE PROBLEMAS HABITUALES
+-------------------------------------------------------------------------------
+- NO SE ESCUCHA EL AUDIO / NO FUNCIONA EL MICRÓFONO:
+  Verifica los permisos del micrófono en el sistema operativo y el dispositivo
+  elegido en ⚙️ Ajustes.
+- NO SE CONECTA DESDE OTRO PC:
+  El Firewall de Windows del Host debe permitir conexiones entrantes en el
+  puerto 3000 (chat) y en el 3001 (voz). Si solo está abierto el 3000, el chat
+  funcionará pero la voz no.
+- EL CHAT FUNCIONA PERO LA VOZ NO DESDE UN NAVEGADOR:
+  Hay que usar la aplicación de escritorio. Si se abre `http://<IP_DEL_HOST>:3000`
+  en un navegador web, éste bloquea el micrófono por no ser un origen seguro (HTTPS).
+===============================================================================

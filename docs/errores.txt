@@ -1,131 +1,179 @@
 ===============================================================================
-                       REGISTRO DE ERRORES Y SOLUCIONES
-                        PROYECTO: DISCORD_LIKE (ELECTRON)
+                       DISCORD_LIKE - REGISTRO DE ERRORES Y DIAGNÓSTICO
+===============================================================================
+[METADATA]
+PROJECT: Discord_like (Electron + Socket.io + PeerJS)
+LAST_UPDATED: 2026-10-08
+FORMAT_VERSION: 1.0.0
+PURPOSE: Base de conocimientos para diagnóstico rápido y contexto de IA.
+
+-------------------------------------------------------------------------------
+                                ÍNDICE RÁPIDO
+-------------------------------------------------------------------------------
+| ID      | CATEGORÍA      | PALABRAS CLAVE                     | FICHEROS AFECTADOS                 |
+|---------|----------------|------------------------------------|------------------------------------|
+| ERR-001 | Modulos UMD    | module is defined, io is not def   | public/index.html                  |
+| ERR-002 | Electron HWND  | alert, confirm, input bloqueado    | public/index.html, audio_script.js |
+| ERR-003 | Socket.io      | unirseSala, reconexión, sala cae   | public/index.html, server.js       |
+| ERR-004 | DevTools Logs  | sourceMappingURL 404 ENOENT        | public/peerjs.min.js, socket.io    |
+| ERR-005 | Layout / CSS   | audio-controls cortados, sidebar   | public/index.html, style.css       |
+| ERR-006 | Red / Host     | IP local, VPN, conectar otro PC    | main.js, public/index.html         |
+| ERR-007 | Entorno        | require is not defined, navegador  | public/index.html                  |
+
+===============================================================================
+                          DETALLE DE ERRORES Y SOLUCIONES
 ===============================================================================
 
--------------------------------------------------------------------------------
-FECHA: 2026-10-08
-ERROR 1: Uncaught ReferenceError: require is not defined en index.html
--------------------------------------------------------------------------------
-SÍNTOMA:
-  Al abrir public/index.html directamente en un navegador web o fuera del flujo
-  principal de Electron, la aplicación se colapsaba con el error:
-  "ReferenceError: require is not defined at index.html:134".
-
-CAUSA:
-  En navegadores web estándar no existe la función require() nativa de Node.js.
-
-SOLUCIÓN:
-  Se implementó una verificación defensiva en index.html:
-  `let ipcRenderer = null; if (typeof require !== 'undefined') { ... }`
-  De esta forma la aplicación puede ejecutarse tanto en Electron como en un
-  navegador web tradicional sin romper la ejecución.
-
--------------------------------------------------------------------------------
-FECHA: 2026-10-08
-ERROR 2: Secuestro UMD de Socket.io / PeerJS y variables globales no definidas
--------------------------------------------------------------------------------
-SÍNTOMA:
-  Error en consola: "Uncaught Error at audio_script.js:306". Las variables globales
-  `window.io` y `window.Peer` eran `undefined`.
-
-CAUSA:
-  Con `nodeIntegration: true` activado en Electron, las librerías cargadas vía
-  etiquetas <script> (Socket.io y PeerJS) detectaban la presencia global de
-  `module.exports` de Node.js y se exportaban dentro de `module.exports` en lugar
-  de asignarse a las variables globales de ventana `window.io` y `window.Peer`.
-
-SOLUCIÓN:
-  Se añadió un parche de aislamiento UMD en index.html:
+---
+[ID]: ERR-001
+[DATE]: 2026-10-08
+[COMPONENTS]: public/index.html
+[SYMPTOMS]:
+  - Error en consola: `ReferenceError: io is not defined` o `Peer is not defined`.
+  - Los scripts CDN o locales de Socket.io y PeerJS cargan pero no crean `window.io` ni `window.Peer`.
+[LOG_OR_BEHAVIORAL_SIGNATURE]:
+  "Uncaught ReferenceError: io is not defined at audio_script.js:10"
+[ROOT_CAUSE_DIAGNOSIS]:
+  - Electron tiene `nodeIntegration: true` activado en BrowserWindow.
+  - Esto expone el objeto global Node `module` y `exports` al proceso Renderer.
+  - Las librerías UMD (Universal Module Definition) comprueban si `typeof module !== 'undefined'` y exportan sus funciones dentro de `module.exports` en lugar de asignarlas al objeto global `window`.
+[SOLUTION]:
+  Aislar temporalmente la variable `module` antes de cargar scripts UMD vendor en `public/index.html`:
   ```html
-  <script>if (typeof module === 'object') { window.nodeModule = module; module = undefined; }</script>
+  <script>
+    if (typeof module === 'object') {
+      window.tempModule = module;
+      module = undefined;
+    }
+  </script>
   <script src="socket.io.min.js"></script>
   <script src="peerjs.min.js"></script>
-  <script>if (window.nodeModule) { module = window.nodeModule; window.nodeModule = undefined; }</script>
+  <script>
+    if (window.tempModule) {
+      module = window.tempModule;
+      window.tempModule = undefined;
+    }
+  </script>
   ```
+[PREVENTION_RULE]:
+  - NUNCA incluir scripts vendor UMD directamente en Electron Renderer sin envolver con aislamiento de `module` o requerirlos explícitamente mediante `require()`.
 
--------------------------------------------------------------------------------
-FECHA: 2026-10-08
-ERROR 3: Advertencias de Source Maps de PeerJS en DevTools
--------------------------------------------------------------------------------
-SÍNTOMA:
-  DevTools mostraba advertencias continuas:
-  "Could not read source map for peerjs.min.js.map: ENOENT: no such file".
+---
+[ID]: ERR-002
+[DATE]: 2026-10-08
+[COMPONENTS]: public/index.html, public/style.css, public/audio_script.js
+[SYMPTOMS]:
+  - Al salir de la sala de voz, intentar desloguearse o pulsar botones que ejecuten `alert()` o `confirm()`, la caja de texto del login (`#input-usuario`) deja de recibir teclado.
+  - El cursor parpadea en la caja de texto, pero al escribir las letras no aparecen en el input (no se dispara el evento `input` de HTML).
+[LOG_OR_BEHAVIORAL_SIGNATURE]:
+  Input DOM focused, event `keydown` se emite pero el valor del `<input>` permanece inmutable tras la llamada a `alert()` o `confirm()` nativos.
+[ROOT_CAUSE_DIAGNOSIS]:
+  - En Windows + Electron (Chromium), la invocación de modales nativos síncronos `window.alert()` o `window.confirm()` genera una ventana de mensaje Win32 nativa (`MessageBoxW`).
+  - Al cerrarse la ventana nativa, Chromium pierden el foco de composición de caracteres Win32 (`RenderWidgetHostViewWin`). El foco DOM parece activo, pero la tubería de entrada de texto nativa queda corrompida.
+[SOLUTION]:
+  - Eliminar COMPLETAMENTE `alert()` y `confirm()` de todo el código de cliente.
+  - Crear un sistema de notificaciones Toast no bloqueantes basado en HTML/CSS (`.toast-notificacion`).
+  - Asegurar un `z-index: 50000` en `#login-screen` para mantener visibilidad e interacción fluida.
+[PREVENTION_RULE]:
+  - REGLA ABSOLUTA: PROHIBIDO usar `alert()`, `confirm()` o `prompt()` nativos de JavaScript en aplicaciones Electron sobre Windows. Usar componentes Toast HTML/CSS personalizados.
 
-CAUSA:
-  El archivo compilado de CDN incluía el comentario `//# sourceMappingURL=peerjs.min.js.map`,
-  haciendo que el navegador buscase un archivo .map inexistente.
-
-SOLUCIÓN:
-  Se descargaron `peerjs.min.js` y `socket.io.min.js` localmente en la carpeta `/public`
-  y se eliminaron los comentarios `sourceMappingURL` mediante script.
-
--------------------------------------------------------------------------------
-FECHA: 2026-10-08
-ERROR 4: Pérdida de suscripción a salas de Socket.io tras reconexión o re-login
--------------------------------------------------------------------------------
-SÍNTOMA:
-  Tras cerrar sesión o reconectar el socket, los mensajes de chat enviados por el
-  usuario no se mostraban en pantalla ni se distribuían a los demás.
-
-CAUSA:
-  Al desconectar y volver a conectar el socket (o al re-iniciar sesión), el socket
-  obtenía un nuevo `socket.id`. El servidor Socket.io requiere que el cliente vuelva
-  a emitir el evento `unirseSala` para ejecutar `socket.join(sala)`. Sin esto, el
-  socket quedaba fuera de la sala y no recibía las emisiones `io.to(sala)`.
-
-SOLUCIÓN:
-  Se añadió un escuchador automático del evento de conexión:
+---
+[ID]: ERR-003
+[DATE]: 2026-10-08
+[COMPONENTS]: public/index.html, server.js
+[SYMPTOMS]:
+  - Tras micro-cortes de red o reconexiones de WebSocket, los usuarios dejan de escucharse en la sala o no reciben eventos de mensajería.
+[LOG_OR_BEHAVIORAL_SIGNATURE]:
+  Socket.io emite `reconnect`, pero el servidor considera que el socket no pertenece a ninguna sala activa.
+[ROOT_CAUSE_DIAGNOSIS]:
+  - La emisión del evento `unirseSala` solo se ejecutaba en la inicialización o al hacer clic en el botón de unirse.
+  - Al reconectarse Socket.io, el servidor asigna un nuevo Socket ID y pierde las salas asignadas al socket anterior.
+[SOLUTION]:
+  - Enlazar la reconexión de sala dentro del listener del evento `connect` de Socket.io:
   ```javascript
   socket.on('connect', () => {
-      if (usuario) socket.emit('unirseSala', { sala: salaActual, nombre: usuario });
+    if (usuario) {
+      socket.emit('unirseSala', { sala: salaActual, nombre: usuario });
+    }
   });
   ```
+[PREVENTION_RULE]:
+  - Toda lógica de suscripción a canales/salas en Socket.io debe ser re-ejecutada dentro del evento `socket.on('connect')`.
 
--------------------------------------------------------------------------------
-FECHA: 2026-10-08
-ERROR 5 (CRÍTICO): Bloqueo de entrada de texto en <input> tras invocar confirm() o alert() nativos
--------------------------------------------------------------------------------
-SÍNTOMA:
-  Al pulsar el botón 🌐 borrarIP o interactuar con los botones de audio (🎤 / 📞) antes
-  de conectar a voz, la caja de texto del login quedaba inerte. El cursor parpadeaba,
-  el elemento ganaba el foco (`activeElement: INPUT`) y la consola registraba eventos
-  `keydown`, pero las letras NO se escribían en el campo ni se lanzaba el evento `input`.
+---
+[ID]: ERR-004
+[DATE]: 2026-10-08
+[COMPONENTS]: public/peerjs.min.js, public/socket.io.min.js
+[SYMPTOMS]:
+  - Advertencias molestas en la consola DevTools: `GET http://.../peerjs.min.js.map 404 (Not Found)`.
+[LOG_OR_BEHAVIORAL_SIGNATURE]:
+  Console warning: "DevTools failed to load source map: Could not load content for peerjs.min.js.map: HTTP error: status code 404"
+[ROOT_CAUSE_DIAGNOSIS]:
+  - Directiva `//# sourceMappingURL=peerjs.min.js.map` presente al final de las librerías minificadas sin disponer de los archivos `.map` en local.
+[SOLUTION]:
+  - Descargar los archivos JS minificados locales a la carpeta `public/` y remover la línea de directiva `sourceMappingURL`.
+[PREVENTION_RULE]:
+  - Eliminar referencias a Source Maps externos cuando se sirvan archivos estáticos vendor localmente sin archivos `.map`.
 
-CAUSA RAÍZ:
-  Bug conocido de Chromium / Electron en Windows con diálogos nativos:
-  Al invocar las funciones del navegador `alert(...)` o `confirm(...)`, Windows abre
-  una ventana nativa emergente (`MessageBoxW`). Al cerrarse, la vista de composición
-  de entrada de texto de Chromium (`RenderWidgetHostViewWin`) pierde la asociación del
-  HWND con el sistema operativo. Aunque JavaScript sigue recibiendo eventos de teclado
-  sintéticos (`keydown`), el gestor de texto de Chromium deshecha los caracteres.
+---
+[ID]: ERR-005
+[DATE]: 2026-10-08
+[COMPONENTS]: public/index.html, public/style.css
+[SYMPTOMS]:
+  - En ventanas pequeñas de Electron o pantallas de baja resolución, los botones del panel `#audio-controls` y los nombres del `#sidebar` se cortaban o salían de la pantalla.
+[LOG_OR_BEHAVIORAL_SIGNATURE]:
+  Desbordamiento horizontal y recortes visibles en controles de silencio/desconexión y nombres de canal.
+[ROOT_CAUSE_DIAGNOSIS]:
+  - Uso de contenedores Flex de una sola fila (`flex-wrap: nowrap`) con anchos fijos y sin reglas de elipsis (`text-overflow: ellipsis`).
+[SOLUTION]:
+  - Refactorizar `#audio-controls` en dos filas bien estructuradas con `flex-wrap: wrap`.
+  - Aplicar `overflow: hidden; text-overflow: ellipsis; white-space: nowrap;` a los contenedores de texto.
+  - Ajustar tamaños con unidades relativas y media queries para resoluciones reducidas.
+[PREVENTION_RULE]:
+  - Diseñar interfaces fijas de escritorio considerando reescalado de ventana mínimo de 300px-400px de ancho.
 
-SOLUCIÓN:
-  1. Se eliminó la llamada nativa `confirm()` en `borrarIP()`, sustituyéndola por una
-     recarga limpia `location.reload()`.
-  2. Se reemplazaron todas las alertas nativas `alert(...)` del proyecto por un
-     **Sistema de Notificaciones Toast** flotantes en HTML/CSS (`.toast-notificacion`).
-  3. Se incrementó el `z-index` de `#login-screen` a `50000` en `style.css` para evitar
-     bloqueos por capas transparentes.
+---
+[ID]: ERR-006
+[DATE]: 2026-10-08
+[COMPONENTS]: main.js, public/index.html, public/audio_script.js
+[SYMPTOMS]:
+  - Dificultad para conectar otros PCs en la misma red local o VPN al desconocer la dirección IP del Host.
+[LOG_OR_BEHAVIORAL_SIGNATURE]:
+  El usuario requiere abrir `cmd` y ejecutar `ipconfig` manualmente para saber a qué IP deben conectarse sus compañeros.
+[ROOT_CAUSE_DIAGNOSIS]:
+  - Ausencia de módulo de autodetección de red local en la aplicación.
+[SOLUTION]:
+  - Implementar IPC Handler en `main.js` usando `os.networkInterfaces()` para filtrar direcciones IPv4 locales (Wi-Fi, Ethernet, VPN Hamachi/Radmin).
+  - Enviar las IPs al renderizador para mostrar un banner informativo con botón de copiar con 1-clic.
+[PREVENTION_RULE]:
+  - Proporcionar siempre mecanismos automáticos de descubrimiento de IP de red local para aplicaciones peer-to-peer o servidor-cliente alojadas localmente.
 
--------------------------------------------------------------------------------
-FECHA: 2026-10-08
-ERROR 6: Desbordamiento y corte de elementos en audio-controls y textos del sidebar
--------------------------------------------------------------------------------
-SÍNTOMA:
-  Al reducir el ancho de la ventana, los botones de `#audio-controls` se cortaban y
-  los nombres de los canales del sidebar desaparecían o se cortaban a la mitad.
+---
+[ID]: ERR-007
+[DATE]: 2026-10-08
+[COMPONENTS]: public/index.html
+[SYMPTOMS]:
+  - Al abrir `public/index.html` en un navegador web (o fuera del flujo de Electron), la aplicación se cae al cargar.
+[LOG_OR_BEHAVIORAL_SIGNATURE]:
+  "Uncaught ReferenceError: require is not defined at index.html"
+[ROOT_CAUSE_DIAGNOSIS]:
+  - `require()` solo existe en el Renderer de Electron con `nodeIntegration: true`. Los navegadores estándar no lo definen.
+[SOLUTION]:
+  - Obtener `ipcRenderer` de forma defensiva en `public/index.html`:
+  ```javascript
+  let ipcRenderer = null;
+  if (typeof require !== 'undefined') {
+    try {
+      ipcRenderer = require('electron').ipcRenderer;
+    } catch (e) {
+      console.warn("Electron require no disponible en el navegador web.");
+    }
+  }
+  ```
+[PREVENTION_RULE]:
+  - Todo acceso a APIs de Node/Electron desde el Renderer debe comprobar antes `typeof require !== 'undefined'` y tolerar `ipcRenderer === null`.
 
-CAUSA:
-  Disposición horizontal rígida de 5 botones en una sola fila dentro de una barra
-  lateral de `240px` (o `60px` en modo colapsado) y reglas CSS que ocultaban el texto.
-
-SOLUCIÓN:
-  1. Se refactorizó `#audio-controls` en 2 niveles: botón principal de voz arriba y
-     fila de 4 botones de acción abajo (`.audio-actions`).
-  2. Se envolvieron los nombres de los canales en `<span class="nombre-sala">` con
-     reglas de truncado con puntos suspensivos (`text-overflow: ellipsis`).
-  3. Se configuraron Media Queries en CSS (`@media (max-width: 768px)` y `480px`) para
-     escalar dinámicamente tipografías y anchos sin ocultar ni cortar los textos.
+===============================================================================
+                          FIN DEL REGISTRO DE ERRORES
 ===============================================================================
 
