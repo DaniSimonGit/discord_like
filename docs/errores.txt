@@ -231,7 +231,7 @@ PURPOSE: Base de conocimientos para diagnóstico rápido y contexto de IA.
   - Los ficheros se leen con `XMLHttpRequest` (`cargarArchivo`), que sí funciona en `file://` (status 0 = correcto).
   - El código del worklet se carga como texto y se registra con `addModule()` a través de una URL `Blob` (`URL.createObjectURL`).
   - No se usan `loadRnnoise` ni `RnnoiseWorkletNode` de la librería; se crea `new AudioWorkletNode(ctx, '@sapphi-red/web-noise-suppressor/rnnoise', ...)` directamente.
-  - Verificado con una prueba automática en Electron 29 sin ventana: carga en ~17 ms usando la versión SIMD.
+  - Verificado con una prueba automática en Electron 29 sin ventana: carga en ~17 ms usando la versión SIMD. Re-verificado en Electron 45 con los mismos resultados.
 [PREVENTION_RULE]:
   - En el Renderer de esta app (servido desde `file://`), no usar `fetch()` para recursos locales: usar `XMLHttpRequest` o URLs `Blob`.
 

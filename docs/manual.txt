@@ -13,7 +13,7 @@ redes locales (LAN) o redes privadas virtuales (VPN).
 
 2. REQUISITOS DEL SISTEMA
 -------------------------------------------------------------------------------
-- Sistema Operativo: Windows 10/11, Linux o macOS.
+- Sistema Operativo: Windows 10/11 de 64 bits, Linux o macOS 13 o superior.
 - Para desarrollo: Node.js (v18 o superior) y npm.
 - Permisos de red en el Firewall de Windows para Node.js/Electron.
 

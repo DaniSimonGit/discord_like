@@ -27,7 +27,9 @@ PURPOSE: Referencia arquitectónica exhaustiva y estructurada para consumo rápi
 Aplicación de escritorio multiplataforma que replica las funciones esenciales de Discord (salas de chat de texto en tiempo real, canales de voz P2P de baja latencia, indicador visual de actividad de voz y lista de usuarios conectados) diseñada para funcionar en redes locales (LAN) o VPNs. No depende de ninguna VPN concreta: basta con que los equipos se vean por IP.
 
 [TECH_STACK]
-- Runtime & Shell: Electron (`^29.1.0`) + Node.js (empaquetado con `@electron-forge/cli`).
+- Runtime & Shell: Electron (`^45.0.0`, Node 24, Chromium 156) (empaquetado con `@electron-forge/cli`). Sin builds de Windows 32 bits (eliminados en Electron 44).
+  - Al tocar `ipcMain.handle`: leer `event.senderFrame` de forma síncrona, antes de cualquier `await` (desde Electron 33 puede quedar `null`/desacoplado).
+  - El evento `console-message` usa un objeto (`event.level` como string, `event.message`) desde Electron 35.
 - Servidor HTTP y Señalización:
   - Express (`^4.18.2`): Sirve archivos estáticos de `public/` en el puerto `3000` (`0.0.0.0`).
   - Socket.io (`^4.7.4`): Transporte WebSocket para salas de texto, presencia de usuarios, señalización de entrada a voz y estados de habla (halo verde) en el puerto `3000`.
