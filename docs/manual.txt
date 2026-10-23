@@ -26,6 +26,11 @@ Abre una terminal de comandos en la carpeta raíz del proyecto y ejecuta:
 
 Este comando compila los activos e inicia Electron Forge (`electron-forge start`).
 
+Si actualizas la librería del filtro de ruido (`@sapphi-red/web-noise-suppressor`),
+ejecuta después este comando para copiar la nueva versión a `public/vendor/rnnoise/`:
+
+    npm run vendor:rnnoise
+
 
 4. MODOS DE USO Y CONFIGURACIÓN DE RED
 -------------------------------------------------------------------------------
@@ -55,6 +60,14 @@ B) 🤝 UNIRSE AL SERVIDOR (Ser Cliente)
   Todos los usuarios se unen a una misma red en ZeroTier o Tailscale.
   El Host comparte la IP asignada por ZeroTier (ej. 10.147.17.5).
   Los demás se conectan colocando esa IP.
+  Consejos para ZeroTier:
+  - Windows suele marcar la red de ZeroTier como "Pública" y bloquear las
+    conexiones entrantes. En el Host, permite la app también en redes públicas
+    cuando salga el aviso del Firewall, o marca la red de ZeroTier como "Privada"
+    (Configuración > Red e Internet).
+  - Para que la IP del Host no cambie, asígnale una IP fija en ZeroTier Central
+    (my.zerotier.com > tu red > Members). Si cambia, los demás tendrán que
+    pulsar "Cancelar" o 🌐 e introducir la nueva.
 
 - OPCIÓN 3: Por Internet Directo (Apertura de Puertos)
   El Host redirige en su Router los puertos 3000 (TCP) y 3001 (TCP/UDP) hacia la IP 
@@ -108,4 +121,12 @@ en los ordenadores de tus amigos):
 - EL CHAT FUNCIONA PERO LA VOZ NO DESDE UN NAVEGADOR:
   Hay que usar la aplicación de escritorio. Si se abre `http://<IP_DEL_HOST>:3000`
   en un navegador web, éste bloquea el micrófono por no ser un origen seguro (HTTPS).
+- ME OIGO CON ECO EN LA PRUEBA DE MICRÓFONO:
+  Un eco ligero y único es normal: el filtro añade un pequeño retardo y tu voz
+  llega a los cascos un poco después de que la oigas tú mismo. En la llamada
+  no ocurre. Si el eco se repite o hay pitidos, estás usando altavoces: la
+  prueba debe hacerse con cascos.
+- SE SIGUEN OYENDO PALMADAS O GOLPES:
+  Es una limitación del filtro de ruido (RNNoise): reduce los ruidos fuertes y
+  cortos, pero no los elimina del todo.
 ===============================================================================

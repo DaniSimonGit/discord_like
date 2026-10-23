@@ -3,7 +3,7 @@
 ===============================================================================
 [METADATA]
 PROJECT: Discord_like (Electron + Express + Socket.io + PeerJS WebRTC)
-LAST_UPDATED: 2026-10-22
+LAST_UPDATED: 2026-10-23
 FORMAT_VERSION: 1.0.0
 PURPOSE: Referencia arquitectónica exhaustiva y estructurada para consumo rápido por modelos de IA y agentes de código.
 
@@ -16,7 +16,7 @@ PURPOSE: Referencia arquitectónica exhaustiva y estructurada para consumo rápi
 | SEC-02  | Mapa de Archivos          | main.js, server.js, index.html, audio_script.js |
 | SEC-03  | Arquitectura de Procesos  | Main Process, Renderer, IPC, Host vs Cliente    |
 | SEC-04  | Contratos de Red (IPC/WS) | Eventos IPC, Socket.io Events, PeerJS Signaling |
-| SEC-05  | Flujos Funcionales        | Roles, Login, Chat, Salas, Voz WebRTC, VAD      |
+| SEC-05  | Flujos Funcionales        | Roles, Login, Chat, Salas, Voz, RNNoise, VAD    |
 | SEC-06  | Estado del Cliente y DOM  | Variables Globales, localStorage, IDs de DOM    |
 | SEC-07  | Invariantes y Reglas IA   | Restricciones críticas para futuras ediciones   |
 
@@ -44,7 +44,8 @@ Aplicación de escritorio multiplataforma que replica las funciones esenciales d
 ===============================================================================
 | ARCHIVO                  | ROL ARQUITECTÓNICO                                                  |
 |--------------------------|---------------------------------------------------------------------|
-| `package.json`           | Configuración de dependencias y scripts de Electron Forge (`start`, `package`, `make`). |
+| `package.json`           | Configuración de dependencias y scripts de Electron Forge (`start`, `package`, `make`) y `vendor:rnnoise`. |
+| `scripts/copiar-rnnoise.js` | Copia el worklet y los `.wasm` de RNNoise desde `node_modules` a `public/vendor/rnnoise/`, quitando el comentario `sourceMappingURL`. Se ejecuta con `npm run vendor:rnnoise`. |
 | `main.js`                | Proceso Principal de Electron. Crea `BrowserWindow`, gestiona IPC (`iniciar-host`, `obtener-ips-host`) y arranca `server.js` bajo demanda. |
 | `server.js`              | Backend Node.js. Levanta Express + Socket.io en `0.0.0.0:3000` y `PeerServer` en `:3001`. Mantiene en memoria `historialMensajes` y `usuariosConectados`. |
 | `public/index.html`      | Interfaz de usuario (modales de Rol/IP/Login/Ajustes, Sidebar, Chat, Lista de Usuarios), aislamiento UMD y controlador JS de conexión/chat. |
@@ -226,7 +227,10 @@ B) SERVIDOR -> CLIENTE (`socket.on`):
 - En `public/audio_script.js`:
   - `savedIP`: Copia de `chatServerIP` al cargar el script.
   - `myPeer`: Instancia de `Peer` (PeerJS).
-  - `myStream`: `MediaStream` local del micrófono.
+  - `myStream`: `MediaStream` local del micrófono YA FILTRADO por RNNoise (es el que se envía, se analiza y se mutea).
+  - `microfonoVoz`: Objeto `{ stream, detener() }` devuelto por `obtenerMicrofono()` durante la llamada. `detener()` libera micrófono original, filtro y `AudioContext`.
+  - `rnnoiseArchivos`: Caché `{ worklet: string, wasm: ArrayBuffer }` para no recargar RNNoise en cada conexión.
+  - `pruebaMicro`, `pruebaAudio`, `pruebaCargando`: Estado de la prueba de micrófono de `#settings-modal`.
   - `peersConectados`: Diccionario `{ [peerId]: MediaConnection }`.
   - `enLlamada`: Booleano que indica si el usuario está conectado al canal de voz.
   - `micEnabled`: Booleano de estado del micrófono (`true` = activo, `false` = muteado).
@@ -240,6 +244,7 @@ B) SERVIDOR -> CLIENTE (`socket.on`):
   - `#ip-modal`, `#ip-input`: Configuración manual de IP del servidor.
   - `#login-screen`, `#form-login`, `#input-usuario`: Pantalla de entrada de nombre de usuario (`z-index: 50000`).
   - `#settings-modal`, `#audio-input`, `#audio-output`: Selector de micrófono y altavoces.
+  - `#btn-probar-micro`: Botón de prueba de micrófono dentro de `#settings-modal` (`togglePruebaMicro()`).
 - Barra Lateral Izquierda (`#sidebar`):
   - `#host-ip-banner`, `#host-ip-list`: Panel que muestra las IPs detectadas cuando se actúa como Host.
   - `.btn-sala`, `.nombre-sala`: Botones de cambio de canal (`#General`, `#Juegos`, `#Música`).
@@ -259,6 +264,9 @@ B) SERVIDOR -> CLIENTE (`socket.on`):
 4. [VOICE_IS_GLOBAL]: El canal de voz (`unirse-voz-global`) es único y global para todo el servidor (independiente de la sala de texto `#General`, `#Juegos` o `#Música` en la que esté el usuario), aunque el evento visual `hablando`/`silencio` se emite a la sala actual del usuario (`socket.broadcast.to(usuario.sala)`).
 5. [DOM_USER_ID_CONVENTION]: Los elementos de la lista de usuarios deben mantener el formato `id="user-${nombre}"` porque `activarHalo(nombre, encender)` en `audio_script.js` depende de ese selector exacto para encender el halo verde de voz.
 6. [NO_HARDCODED_IPS]: No fijar IPs concretas en el código (`main.js`, flags de Chromium, etc.). La IP del servidor es dinámica (`localStorage.chatServerIP`). Si en el futuro la UI se cargara desde una URL `http://<IP>` en vez de `file://`, el micrófono dejaría de funcionar y habría que resolverlo de forma dinámica, no con una IP fija.
+7. [MIC_PIPELINE]: Obtener SIEMPRE el micrófono con `obtenerMicrofono()` (nunca `getUserMedia` directo) para que pase por RNNoise, y liberarlo con su `detener()`. No activar `noiseSuppression` nativo junto con RNNoise (doble procesado); solo se usa como respaldo dentro de `obtenerMicrofono()`.
+8. [NO_FETCH_FILE_URLS]: La UI se sirve desde `file://`. Para leer recursos locales usar `XMLHttpRequest` (`cargarArchivo`) y registrar worklets desde URLs `Blob`; `fetch()` no admite `file://`.
+9. [VENDOR_RNNOISE]: No editar a mano `public/vendor/rnnoise/`. Tras actualizar `@sapphi-red/web-noise-suppressor`, ejecutar `npm run vendor:rnnoise`. Si la librería cambia el nombre del procesador, actualizar `RNNOISE_PROCESSOR_ID` en `audio_script.js`.
 ===============================================================================
                           FIN DEL DOCUMENTO DE CONTEXTO IA
 ===============================================================================
