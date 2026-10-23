@@ -8,7 +8,7 @@
 "Discord_like" es una aplicación de escritorio multiplataforma desarrollada con 
 Electron, Node.js, Express, Socket.io y PeerJS (WebRTC). Réplica ligera y privada 
 de Discord orientada a la comunicación por texto y voz en tiempo real dentro de 
-redes locales (LAN) o redes privadas virtuales (VPN como ZeroTier).
+redes locales (LAN) o redes privadas virtuales (VPN).
 
 
 2. REQUISITOS DEL SISTEMA
@@ -41,11 +41,11 @@ A) 👑 HOSTEAR SERVIDOR (Ser el Host)
      servidor Node.js backend (`server.js`) escuchando en el puerto 3000 (HTTP/Socket.io) 
      y el servidor de señalización de voz PeerJS en el puerto 3001.
    - La aplicación detecta automáticamente todas las direcciones IP de tu equipo 
-     (Wi-Fi, Ethernet, ZeroTier, etc.) y las muestra en la barra lateral con un 
+     (Wi-Fi, Ethernet, VPN, etc.) y las muestra en la barra lateral con un 
      botón 📋 para copiarlas con un solo clic.
 
 B) 🤝 UNIRSE AL SERVIDOR (Ser Cliente)
-   - Introduce la IP del Host (por ejemplo `192.168.1.50` o `10.147.17.5`) y pulsa 
+   - Introduce la IP del Host (por ejemplo `192.168.1.50`) y pulsa
      "Guardar y Conectar".
    - La app se conectará al servidor del Host sin necesidad de ejecutar un backend local.
 
@@ -56,18 +56,16 @@ B) 🤝 UNIRSE AL SERVIDOR (Ser Cliente)
   El Host pulsa "Hostear Servidor" y comparte su IP local (ej. 192.168.1.35).
   Los demás eligen "Unirse al Servidor" y colocan esa IP.
 
-- OPCIÓN 2: Por Internet sin abrir puertos (ZeroTier / Tailscale - RECOMENDADO)
-  Todos los usuarios se unen a una misma red en ZeroTier o Tailscale.
-  El Host comparte la IP asignada por ZeroTier (ej. 10.147.17.5).
+- OPCIÓN 2: Por Internet sin abrir puertos (VPN)
+  Todos los usuarios se unen a una misma red privada virtual (VPN).
+  El Host comparte la IP que le asigna la VPN (aparece en el banner de IPs).
   Los demás se conectan colocando esa IP.
-  Consejos para ZeroTier:
-  - Windows suele marcar la red de ZeroTier como "Pública" y bloquear las
+  - Windows suele marcar las redes virtuales como "Públicas" y bloquear las
     conexiones entrantes. En el Host, permite la app también en redes públicas
-    cuando salga el aviso del Firewall, o marca la red de ZeroTier como "Privada"
+    cuando salga el aviso del Firewall, o marca la red como "Privada"
     (Configuración > Red e Internet).
-  - Para que la IP del Host no cambie, asígnale una IP fija en ZeroTier Central
-    (my.zerotier.com > tu red > Members). Si cambia, los demás tendrán que
-    pulsar "Cancelar" o 🌐 e introducir la nueva.
+  - Si la IP del Host cambia, los demás tendrán que pulsar "Cancelar" o 🌐 e
+    introducir la nueva.
 
 - OPCIÓN 3: Por Internet Directo (Apertura de Puertos)
   El Host redirige en su Router los puertos 3000 (TCP) y 3001 (TCP/UDP) hacia la IP 

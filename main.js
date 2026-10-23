@@ -3,7 +3,7 @@ const path = require('path');
 
 // No hace falta 'unsafely-treat-insecure-origin-as-secure' para el micrófono:
 // la UI se carga con loadFile (origen file://), que Chromium ya considera seguro,
-// aunque Socket.io/PeerJS se conecten luego por HTTP a la IP del Host (LAN/ZeroTier/VPN).
+// aunque Socket.io/PeerJS se conecten luego por HTTP a la IP del Host (LAN/VPN).
 
 // Variable para no encender el servidor dos veces por accidente
 let servidorIniciado = false;
@@ -58,7 +58,7 @@ ipcMain.on('iniciar-host', (event) => {
     }
 });
 
-// Obtener IPs locales (LAN / ZeroTier / VPN) para mostrarlas al Host
+// Obtener IPs locales (LAN / VPN) para mostrarlas al Host
 ipcMain.on('obtener-ips-host', (event) => {
     const interfaces = os.networkInterfaces();
     const ips = [];

@@ -24,7 +24,7 @@ PURPOSE: Referencia arquitectónica exhaustiva y estructurada para consumo rápi
                        SEC-01: VISIÓN GENERAL Y STACK TÉCNICO
 ===============================================================================
 [OVERVIEW]
-Aplicación de escritorio multiplataforma que replica las funciones esenciales de Discord (salas de chat de texto en tiempo real, canales de voz P2P de baja latencia, indicador visual de actividad de voz y lista de usuarios conectados) diseñada para funcionar en redes locales (LAN) o VPNs (ZeroTier / Tailscale / Radmin).
+Aplicación de escritorio multiplataforma que replica las funciones esenciales de Discord (salas de chat de texto en tiempo real, canales de voz P2P de baja latencia, indicador visual de actividad de voz y lista de usuarios conectados) diseñada para funcionar en redes locales (LAN) o VPNs. No depende de ninguna VPN concreta: basta con que los equipos se vean por IP.
 
 [TECH_STACK]
 - Runtime & Shell: Electron (`^29.1.0`) + Node.js (empaquetado con `@electron-forge/cli`).
@@ -61,13 +61,13 @@ Aplicación de escritorio multiplataforma que replica las funciones esenciales d
 ===============================================================================
 [ELECTRON_MAIN_PROCESS] (`main.js`)
 - Configura `BrowserWindow` con `nodeIntegration: true` y `contextIsolation: false` para permitir el acceso directo a `require('electron').ipcRenderer` desde el cliente.
-- NO usa el flag `unsafely-treat-insecure-origin-as-secure` (antes estaba fijado a `http://10.222.195.2:3000`, la IP de ZeroTier del Host). Es innecesario: la UI se carga desde `file://`, que Chromium trata como contexto seguro, por lo que `getUserMedia` funciona sea cual sea la IP del servidor a la que se conecten Socket.io/PeerJS.
+- NO usa el flag `unsafely-treat-insecure-origin-as-secure` (antes estaba fijado a la IP de VPN de un Host concreto). Es innecesario: la UI se carga desde `file://`, que Chromium trata como contexto seguro, por lo que `getUserMedia` funciona sea cual sea la IP del servidor a la que se conecten Socket.io/PeerJS.
 - Carga `public/index.html` directamente mediante `win.loadFile(...)` (en la versión con selector de Host) para que la UI esté disponible antes de decidir si el usuario será Host o Cliente.
 - Mantiene el flag booleano `servidorIniciado` para garantizar que `require('./server.js')` se ejecute como máximo una vez por ciclo de vida de la aplicación.
 
 [SERVER_PROCESS] (`server.js`)
 - Se ejecuta embebido dentro del mismo proceso Node.js de Electron cuando se requiere `server.js`.
-- Escucha en `0.0.0.0:3000` (todas las interfaces IPv4: localhost, LAN Wi-Fi/Ethernet y adaptadores virtuales ZeroTier/VPN).
+- Escucha en `0.0.0.0:3000` (todas las interfaces IPv4: localhost, LAN Wi-Fi/Ethernet y adaptadores virtuales de VPN).
 - Configura CORS abierto (`origin: "*"`) en Socket.io para permitir conexiones desde cualquier IP de la red local o VPN.
 - Levanta `PeerServer({ port: 3001, path: '/' })` para coordinar los apretones de manos (handshakes) WebRTC.
 

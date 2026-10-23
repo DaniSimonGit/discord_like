@@ -97,7 +97,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = 3000;
-// El '0.0.0.0' es la clave mágica. Significa: "Escucha en TODAS mis IPs, incluida la de ZeroTier"
+// El '0.0.0.0' es la clave mágica. Significa: "Escucha en TODAS mis IPs, incluidas las de red local y VPN"
 server.listen(3000, '0.0.0.0', () => {
     console.log('Servidor Chat corriendo en puerto 3000 (Escuchando en todas las interfaces)');
 });
