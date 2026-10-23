@@ -37,7 +37,10 @@ ejecuta después este comando para copiar la nueva versión a `public/vendor/rnn
 Al iniciar la aplicación por primera vez se presenta la pantalla de elección:
 
 A) 👑 HOSTEAR SERVIDOR (Ser el Host)
-   - Al pulsar "Hostear Servidor", el proceso principal de Electron arranca el 
+   - Al pulsar "Hostear Servidor" eliges una CONTRASEÑA (mínimo 4 caracteres).
+     Sin ella nadie puede entrar al chat ni a la voz: pásasela a tus amigos
+     junto con la IP, por un canal privado.
+   - El proceso principal de Electron arranca el 
      servidor Node.js backend (`server.js`) escuchando en el puerto 3000 (HTTP/Socket.io) 
      y el servidor de señalización de voz PeerJS en el puerto 3001.
    - La aplicación detecta automáticamente todas las direcciones IP de tu equipo 
@@ -47,6 +50,8 @@ A) 👑 HOSTEAR SERVIDOR (Ser el Host)
 B) 🤝 UNIRSE AL SERVIDOR (Ser Cliente)
    - Introduce la IP del Host (por ejemplo `192.168.1.50`) y pulsa
      "Guardar y Conectar".
+   - En la pantalla de login escribe tu nombre y la contraseña del Host. La app
+     la recuerda para la próxima vez.
    - La app se conectará al servidor del Host sin necesidad de ejecutar un backend local.
 
 
@@ -68,8 +73,16 @@ B) 🤝 UNIRSE AL SERVIDOR (Ser Cliente)
     introducir la nueva.
 
 - OPCIÓN 3: Por Internet Directo (Apertura de Puertos)
-  El Host redirige en su Router los puertos 3000 (TCP) y 3001 (TCP/UDP) hacia la IP 
+  El Host redirige en su Router los puertos 3000 (TCP) y 3001 (TCP) hacia la IP
   de su PC. Los demás se conectan usando la IP pública del Host.
+  - Así el servidor queda accesible desde todo internet: usa una contraseña
+    larga y difícil de adivinar (tras 5 intentos fallidos la IP queda bloqueada
+    1 minuto, pero una contraseña débil se acaba adivinando).
+  - Si la IP del router no coincide con la que muestran webs tipo "cuál es mi
+    IP", tu operadora usa CGNAT y abrir puertos no funcionará: usa la Opción 2.
+  - La IP pública suele cambiar cada cierto tiempo; habrá que pasar la nueva.
+  - La voz va directa entre los PCs. En redes muy restrictivas (datos móviles,
+    redes de empresa) puede no conectar aunque el chat funcione.
 
 
 6. FUNCIONALIDADES DEL CHAT Y DE VOZ
@@ -124,6 +137,13 @@ en los ordenadores de tus amigos):
   llega a los cascos un poco después de que la oigas tú mismo. En la llamada
   no ocurre. Si el eco se repite o hay pitidos, estás usando altavoces: la
   prueba debe hacerse con cascos.
+- "CONTRASEÑA INCORRECTA" / "DEMASIADOS INTENTOS":
+  Pide la contraseña al Host. Tras 5 fallos seguidos hay que esperar 1 minuto.
+  Si el Host cambió la contraseña, escribe la nueva en el login.
+- "EL NOMBRE YA ESTÁ EN USO":
+  Ya hay alguien conectado con ese nombre (sin distinguir mayúsculas). Elige otro.
+- "VAS DEMASIADO RÁPIDO":
+  El servidor limita a 5 mensajes cada 5 segundos para evitar spam.
 - SE SIGUEN OYENDO PALMADAS O GOLPES:
   Es una limitación del filtro de ruido (RNNoise): reduce los ruidos fuertes y
   cortos, pero no los elimina del todo.

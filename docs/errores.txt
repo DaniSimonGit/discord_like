@@ -22,6 +22,8 @@ PURPOSE: Base de conocimientos para diagnóstico rápido y contexto de IA.
 | ERR-008 | Audio / Ruido  | palmadas, teclado, filtro nativo   | public/audio_script.js             |
 | ERR-009 | Audio / Prueba | voz cortada, metálica, eco, doble  | public/audio_script.js             |
 | ERR-010 | Electron file: | fetch, addModule, file://, wasm    | public/audio_script.js             |
+| ERR-011 | Seguridad      | XSS, innerHTML, nodeIntegration    | main.js, preload.js, server.js...  |
+| ERR-012 | Electron       | electronAPI already been declared  | public/index.html, preload.js      |
 
 ===============================================================================
                           DETALLE DE ERRORES Y SOLUCIONES
@@ -232,6 +234,45 @@ PURPOSE: Base de conocimientos para diagnóstico rápido y contexto de IA.
   - Verificado con una prueba automática en Electron 29 sin ventana: carga en ~17 ms usando la versión SIMD.
 [PREVENTION_RULE]:
   - En el Renderer de esta app (servido desde `file://`), no usar `fetch()` para recursos locales: usar `XMLHttpRequest` o URLs `Blob`.
+
+---
+[ID]: ERR-011
+[DATE]: 2026-10-23
+[COMPONENTS]: main.js, preload.js, server.js, public/index.html, public/audio_script.js, package-lock.json
+[SYMPTOMS]:
+  - Vulnerabilidad detectada en revisión (no explotada) al plantear alojar la app abriendo puertos a internet.
+[LOG_OR_BEHAVIORAL_SIGNATURE]:
+  Un mensaje como `<img src=x onerror="...">` se ejecutaba como código en el PC de todos los conectados.
+[ROOT_CAUSE_DIAGNOSIS]:
+  - XSS: `pintarMensaje()` y la lista de usuarios insertaban `msg.texto`, `msg.usuario` y `nombre` con `innerHTML`.
+  - Escalada a ejecución remota: con `nodeIntegration: true` y `contextIsolation: false`, ese código tenía `require('child_process')`, es decir, control total del PC.
+  - Servidor sin autenticación: cualquiera que llegara al puerto entraba al chat y escuchaba la voz (canal de voz global).
+  - Servidor confiado: aceptaba `usuario` y `sala` del cliente (suplantación, escribir en otras salas), creaba salas sin límite y no limitaba tamaño ni frecuencia de mensajes.
+  - DevTools abierto siempre (también en el `.exe`) y 8 vulnerabilidades conocidas en dependencias de servidor (`ws`, `socket.io-parser`, `proxy-addr`, `qs`...).
+[SOLUTION]:
+  - Cliente: todo dato externo se inserta con `textContent` (`crearElemento`), y el banner de IPs con nodos DOM + `addEventListener`.
+  - Electron: `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true` y `preload.js` con `contextBridge` (solo `iniciarHost` y `obtenerIpsHost`). IPC con `ipcMain.handle` que valida el origen. Navegación y `window.open` bloqueados, permisos limitados (micrófono, portapapeles y altavoz), CSP en `index.html` y DevTools solo en desarrollo.
+  - Servidor: contraseña obligatoria (el Host la elige; SHA-256 + `timingSafeEqual`) con bloqueo de 1 minuto tras 5 fallos por IP. Validación de sala, nombre (1-24 y único), texto (1-1000) y peerId. Autor y sala los decide el servidor. Anti-spam (5 mensajes / 5 s) y `maxHttpBufferSize` de 16 KB.
+  - Dependencias: `npm audit fix --omit=dev` + `npm update express` (express 4.22.3). 0 vulnerabilidades en dependencias de ejecución.
+  - Verificado con una prueba automática en Electron (main.js real con ventana oculta): 15 comprobaciones superadas, sin errores de CSP.
+[PREVENTION_RULE]:
+  - Ver reglas 10-13 de SEC-07 en `contexto_ia.txt`: nada de `innerHTML` con datos, no reactivar Node en la página, el servidor valida todo y revisar la CSP al añadir recursos.
+  - Ejecutar `npm audit --omit=dev` antes de publicar una versión.
+
+---
+[ID]: ERR-012
+[DATE]: 2026-10-23
+[COMPONENTS]: public/index.html, preload.js
+[SYMPTOMS]:
+  - Tras activar `contextBridge`, la página no funcionaba: login, botones y chat sin respuesta.
+[LOG_OR_BEHAVIORAL_SIGNATURE]:
+  "Uncaught SyntaxError: Identifier 'electronAPI' has already been declared" en index.html.
+[ROOT_CAUSE_DIAGNOSIS]:
+  - `contextBridge.exposeInMainWorld('electronAPI', ...)` crea `window.electronAPI` como propiedad global NO configurable. Una declaración `const electronAPI` en un script clásico choca con ella y aborta TODO ese bloque `<script>`.
+[SOLUTION]:
+  - La variable local se llama `apiElectron` (`const apiElectron = window.electronAPI || null;`).
+[PREVENTION_RULE]:
+  - No declarar con `let`/`const`/`class` en el ámbito global ningún nombre que ya exponga `contextBridge`.
 
 ===============================================================================
                           FIN DEL REGISTRO DE ERRORES

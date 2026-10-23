@@ -46,7 +46,8 @@ Aplicación de escritorio multiplataforma que replica las funciones esenciales d
 |--------------------------|---------------------------------------------------------------------|
 | `package.json`           | Configuración de dependencias y scripts de Electron Forge (`start`, `package`, `make`) y `vendor:rnnoise`. |
 | `scripts/copiar-rnnoise.js` | Copia el worklet y los `.wasm` de RNNoise desde `node_modules` a `public/vendor/rnnoise/`, quitando el comentario `sourceMappingURL`. Se ejecuta con `npm run vendor:rnnoise`. |
-| `main.js`                | Proceso Principal de Electron. Crea `BrowserWindow`, gestiona IPC (`iniciar-host`, `obtener-ips-host`) y arranca `server.js` bajo demanda. |
+| `main.js`                | Proceso Principal de Electron. Crea `BrowserWindow` endurecida (sin Node, sandbox, navegación y permisos restringidos), gestiona IPC (`iniciar-host`, `obtener-ips-host`) y arranca `server.js` bajo demanda con la contraseña del Host. |
+| `preload.js`             | Puente `contextBridge`: expone a la página SOLO `window.electronAPI.iniciarHost(password)` y `window.electronAPI.obtenerIpsHost()`. |
 | `server.js`              | Backend Node.js. Levanta Express + Socket.io en `0.0.0.0:3000` y `PeerServer` en `:3001`. Mantiene en memoria `historialMensajes` y `usuariosConectados`. |
 | `public/index.html`      | Interfaz de usuario (modales de Rol/IP/Login/Ajustes, Sidebar, Chat, Lista de Usuarios), aislamiento UMD y controlador JS de conexión/chat. |
 | `public/audio_script.js` | Controlador de WebRTC (`PeerJS`), captura `getUserMedia`, filtro de ruido RNNoise, prueba de micrófono, enrutamiento de dispositivos de entrada/salida, Mute/Deafen y detección de voz con `AudioContext`. |
@@ -60,22 +61,30 @@ Aplicación de escritorio multiplataforma que replica las funciones esenciales d
                     SEC-03: ARQUITECTURA DE PROCESOS Y EJECUCIÓN
 ===============================================================================
 [ELECTRON_MAIN_PROCESS] (`main.js`)
-- Configura `BrowserWindow` con `nodeIntegration: true` y `contextIsolation: false` para permitir el acceso directo a `require('electron').ipcRenderer` desde el cliente.
+- Configura `BrowserWindow` con `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true` y `preload: preload.js`. La página NO tiene acceso a Node.js ni a `require`: solo a `window.electronAPI` (ver `preload.js`).
+- `will-navigate` bloquea cualquier navegación fuera de `public/index.html` (sí permite `location.reload()`), y `setWindowOpenHandler` deniega `window.open`.
+- `setPermissionRequestHandler` solo concede `media` (micrófono), `clipboard-sanitized-write` (copiar IP) y `speaker-selection` (altavoz).
+- Los handlers IPC comprueban con `esNuestraPagina(event)` que la petición viene de `public/index.html`.
+- DevTools solo se abre automáticamente si `!app.isPackaged` (en `npm start`, no en el `.exe`).
 - NO usa el flag `unsafely-treat-insecure-origin-as-secure` (antes estaba fijado a la IP de VPN de un Host concreto). Es innecesario: la UI se carga desde `file://`, que Chromium trata como contexto seguro, por lo que `getUserMedia` funciona sea cual sea la IP del servidor a la que se conecten Socket.io/PeerJS.
 - Carga `public/index.html` directamente mediante `win.loadFile(...)` (en la versión con selector de Host) para que la UI esté disponible antes de decidir si el usuario será Host o Cliente.
-- Mantiene el flag booleano `servidorIniciado` para garantizar que `require('./server.js')` se ejecute como máximo una vez por ciclo de vida de la aplicación.
+- `server.js` exporta `iniciarServidor(password)` y `MIN_PASSWORD` (4). La primera llamada arranca Express/Socket.io/PeerServer; las siguientes solo actualizan la contraseña (flag interno `servidorArrancado`).
 
 [SERVER_PROCESS] (`server.js`)
 - Se ejecuta embebido dentro del mismo proceso Node.js de Electron cuando se requiere `server.js`.
 - Escucha en `0.0.0.0:3000` (todas las interfaces IPv4: localhost, LAN Wi-Fi/Ethernet y adaptadores virtuales de VPN).
-- Configura CORS abierto (`origin: "*"`) en Socket.io para permitir conexiones desde cualquier IP de la red local o VPN.
+- Configura CORS abierto (`origin: "*"`) en Socket.io: la UI viene de `file://` y los clientes de cualquier IP. La protección real es la contraseña, no el origen.
+- [SEGURIDAD] Middleware `io.use`: rechaza el socket si `socket.handshake.auth.password` no coincide (hash SHA-256 + `crypto.timingSafeEqual`). Tras 5 fallos desde una IP la bloquea 1 minuto (`fallosLogin`). Un acierto reinicia el contador.
+- [SEGURIDAD] `maxHttpBufferSize: 16 KB`: un paquete mayor cierra la conexión.
+- [SEGURIDAD] Límites: salas solo de `SALAS` (`General`, `Juegos`, `Musica`), nombre 1-24 caracteres y único (sin distinguir mayúsculas), texto 1-1000 caracteres, anti-spam de 5 mensajes cada 5 s por socket. `limpiarTexto()` quita caracteres de control.
 - Levanta `PeerServer({ port: 3001, path: '/' })` para coordinar los apretones de manos (handshakes) WebRTC.
 
 [RENDERER_PROCESS] (`public/index.html` + `public/audio_script.js`)
 - Aísla `window.module` antes de cargar `socket.io.min.js` y `peerjs.min.js` para evitar que el sistema UMD detecte el entorno CommonJS de Electron y oculte `window.io` y `window.Peer`.
 - Determina el modo de operación leyendo `localStorage.getItem('chatServerIP')`:
   1. Sin IP (`null`): Muestra `#role-modal` (Elegir entre "Hostear Servidor" o "Unirse al Servidor") e instancia un objeto `socket` simulado (no-op) para evitar errores de referencia.
-  2. Con `chatServerIP === 'localhost'`: Solicita al proceso principal vía IPC que arranque el servidor (`iniciar-host`) y obtenga las IPs locales (`obtener-ips-host`) para mostrarlas en `#host-ip-banner`.
+  2. Con `chatServerIP === 'localhost'`: Llama a `apiElectron.iniciarHost(chatServerPassword)` y `apiElectron.obtenerIpsHost()` para mostrar las IPs en `#host-ip-banner` (construido con nodos DOM, sin `innerHTML`). Si no hay contraseña guardada, muestra `#host-modal`.
+     Nota: la variable se llama `apiElectron` porque `contextBridge` crea `window.electronAPI` como propiedad global no configurable y un `const electronAPI` provoca `SyntaxError: Identifier 'electronAPI' has already been declared`.
   3. Con `chatServerIP === '<IP_REMOTA>'`: Se comporta como cliente puro apuntando a `http://<IP_REMOTA>:3000` (Socket.io) y `<IP_REMOTA>:3001` (PeerJS).
 
 ===============================================================================
@@ -87,23 +96,25 @@ Aplicación de escritorio multiplataforma que replica las funciones esenciales d
 -------------------------------------------------------------------------------
 | CANAL IPC            | DIRECCIÓN         | PAYLOAD / FORMATO                       | DESCRIPCIÓN |
 |----------------------|-------------------|-----------------------------------------|-------------|
-| `iniciar-host`       | Renderer -> Main  | Ninguno                                 | Ordena ejecutar `require('./server.js')` si no estaba iniciado. |
-| `host-iniciado`      | Main -> Renderer  | `'ok'` (string)                         | Confirma que el backend Express/Socket.io/PeerServer está activo. |
-| `obtener-ips-host`   | Renderer -> Main  | Ninguno                                 | Solicita el listado de interfaces IPv4 externas del sistema (`os.networkInterfaces()`). |
-| `ips-host-obtenidas` | Main -> Renderer  | `Array<{ interface: string, ip: string }>` | Devuelve las IPs locales y de VPN para pintarlas en `#host-ip-banner`. |
+| `iniciar-host`       | Renderer -> Main (`invoke`) | `password: string` -> devuelve `{ ok: boolean, error?: string }` | Arranca el servidor con esa contraseña (mínimo 4 caracteres) o actualiza la contraseña si ya estaba arrancado. |
+| `obtener-ips-host`   | Renderer -> Main (`invoke`) | Ninguno -> devuelve `Array<{ interface: string, ip: string }>` | Listado de interfaces IPv4 externas del sistema (`os.networkInterfaces()`). |
+- La página los usa a través de `window.electronAPI` (`preload.js`), nunca con `ipcRenderer` directo.
 
 -------------------------------------------------------------------------------
 4.2. EVENTOS SOCKET.IO (Puerto 3000)
 -------------------------------------------------------------------------------
+0) CONEXIÓN: `io(url, { autoConnect: false, auth: (cb) => cb({ password: inputPassword.value }) })`. Si el servidor la rechaza, el cliente recibe `connect_error` con `socket.active === false` y `err.message` (`'Contraseña incorrecta'` o `'Demasiados intentos. Espera un minuto.'`).
+
 A) CLIENTE -> SERVIDOR (`socket.emit`):
 - `unirseSala`
   - Payload: `{ sala: string, nombre: string }`
   - Acción en Servidor: Si el `socket.id` ya estaba en otra sala, ejecuta `socket.leave(salaAnterior)` y actualiza la lista de usuarios de la sala anterior. Une el socket a `sala`, registra `usuariosConectados[socket.id] = { nombre, sala }`, emite `historialSala` al cliente que acaba de entrar y emite `actualizarUsuarios` a toda la sala.
+  - Validación: `sala` debe estar en `SALAS` (si no, se ignora). El nombre solo se fija la primera vez (no se puede cambiar en la sesión). Nombre inválido o en uso -> emite `errorNombre`.
 - `mensajeChat`
-  - Payload: `{ sala: string, usuario: string, texto: string }`
-  - Acción en Servidor: Construye `{ usuario, texto, hora: 'HH:MM' }`, lo guarda en `historialMensajes[sala]` (máximo 50 mensajes por sala, FIFO con `.shift()`) y lo retransmite con `io.to(sala).emit('mensajeChat', nuevoMensaje)`.
+  - Payload: `{ texto: string }` (el servidor IGNORA cualquier `usuario`/`sala` enviado: usa los del socket registrado, así nadie puede suplantar a otro ni escribir en otra sala)
+  - Acción en Servidor: Valida texto (1-1000) y anti-spam (si se supera emite `avisoServidor`). Construye `{ usuario, texto, hora: 'HH:MM' }`, lo guarda en `historialMensajes[sala]` (máximo 50 mensajes por sala, FIFO con `.shift()`) y lo retransmite con `io.to(sala).emit('mensajeChat', nuevoMensaje)`.
 - `unirse-voz-global`
-  - Payload: `peerId: string` (ID asignado por PeerServer al cliente)
+  - Payload: `peerId: string` (ID asignado por PeerServer al cliente). Solo se acepta de sockets registrados y con formato `/^[\w-]{1,64}$/`.
   - Acción en Servidor: Retransmite a todos los demás clientes conectados (`socket.broadcast.emit('usuario-conectado-voz', peerId)`) para que inicien llamadas WebRTC hacia el nuevo participante.
 - `hablando`
   - Payload: Ninguno
@@ -115,6 +126,12 @@ A) CLIENTE -> SERVIDOR (`socket.emit`):
   - Acción en Servidor: Elimina `usuariosConectados[socket.id]` y emite `actualizarUsuarios` a la sala en la que se encontraba el usuario.
 
 B) SERVIDOR -> CLIENTE (`socket.on`):
+- `errorNombre`
+  - Payload: `mensaje: string`
+  - Acción en Cliente: Toast y vuelta a `#login-screen` (`volverAlLogin()`).
+- `avisoServidor`
+  - Payload: `mensaje: string` (p. ej. anti-spam)
+  - Acción en Cliente: Toast.
 - `historialSala`
   - Payload: `Array<{ usuario: string, texto: string, hora: string }>`
   - Acción en Cliente: Limpia `#mensajes` y renderiza cada mensaje histórico mediante `pintarMensaje(msg)`.
@@ -164,12 +181,12 @@ B) SERVIDOR -> CLIENTE (`socket.on`):
 1. Al arrancar, el cliente comprueba `localStorage.getItem('chatServerIP')`.
 2. Si no existe:
    - Se muestra `#role-modal`.
-   - Si elige **Hostear** (`elegirHost()`): Envía IPC `iniciar-host` -> recibe `host-iniciado` -> guarda `chatServerIP = 'localhost'` -> `location.reload()`.
+   - Si elige **Hostear** (`elegirHost()`): Muestra `#host-modal` -> el Host elige contraseña -> `confirmarHost()` llama a `apiElectron.iniciarHost(password)` -> si `ok`, guarda `chatServerIP = 'localhost'` y `chatServerPassword` -> `location.reload()`.
    - Si elige **Unirse** (`elegirJoin()`): Abre `#ip-modal` -> el usuario introduce la IP del Host -> `guardarIP()` guarda `chatServerIP = ip` -> `location.reload()`.
 3. Si existe `chatServerIP`:
    - Se muestra `#login-screen` con foco automático en `#input-usuario`.
    - Si es `'localhost'`, solicita al proceso principal que asegure que el servidor está corriendo y pide la lista de IPs locales para mostrar el bloque `#host-ip-banner` con botones de copiado al portapapeles (`navigator.clipboard.writeText`).
-   - Se instancia `socket = io('http://' + serverIP + ':3000', { autoConnect: false })` y se registran los listeners mediante `inicializarSocketEventos()`.
+   - Se instancia `socket = io('http://' + serverIP + ':3000', { autoConnect: false, auth })` y se registran los listeners mediante `inicializarSocketEventos()`. Si hay `chatServerPassword` guardada, se rellena `#input-password`.
 
 [FLOW-02: LOGIN Y RECONEXIÓN AUTOMÁTICA DE SALAS]
 1. El usuario envía `#form-login` con su nombre (`usuario`).
@@ -217,6 +234,7 @@ B) SERVIDOR -> CLIENTE (`socket.on`):
 
 [CLIENT_PERSISTENT_STATE] (`localStorage`)
 - `localStorage.getItem('chatServerIP')`: Almacena `'localhost'` (modo Host) o la dirección IPv4 del servidor (modo Cliente).
+- `localStorage.getItem('chatServerPassword')`: Contraseña del servidor (la elegida como Host, o la última que conectó con éxito). Se borra al cambiar de servidor (`guardarIP`, `borrarIP`). Se guarda en texto plano en el equipo del usuario.
 
 [CLIENT_RUNTIME_STATE]
 - En `public/index.html`:
@@ -241,8 +259,9 @@ B) SERVIDOR -> CLIENTE (`socket.on`):
 - Modales y Notificaciones:
   - `#toast-notificacion`: Contenedor fijo superior para alertas no bloqueantes.
   - `#role-modal`: Selector inicial entre Hostear (`elegirHost()`) o Unirse (`elegirJoin()`).
+  - `#host-modal`, `#host-password-input`: Elección de contraseña del Host (`confirmarHost()`).
   - `#ip-modal`, `#ip-input`: Configuración manual de IP del servidor.
-  - `#login-screen`, `#form-login`, `#input-usuario`: Pantalla de entrada de nombre de usuario (`z-index: 50000`).
+  - `#login-screen`, `#form-login`, `#input-usuario` (máx. 24), `#input-password`: Pantalla de entrada de nombre y contraseña del servidor (`z-index: 50000`).
   - `#settings-modal`, `#audio-input`, `#audio-output`: Selector de micrófono y altavoces.
   - `#btn-probar-micro`: Botón de prueba de micrófono dentro de `#settings-modal` (`togglePruebaMicro()`).
 - Barra Lateral Izquierda (`#sidebar`):
@@ -259,7 +278,7 @@ B) SERVIDOR -> CLIENTE (`socket.on`):
               SEC-07: INVARIANTES Y REGLAS CRÍTICAS PARA AGENTES IA
 ===============================================================================
 1. [NO_NATIVE_DIALOGS]: NUNCA utilizar `window.alert()`, `window.confirm()` ni `window.prompt()` en ningún archivo del cliente. En Electron sobre Windows corrompen el foco nativo Win32 (`RenderWidgetHostViewWin`) y bloquean la escritura en `<input>`. Usar siempre `mostrarNotificacion(mensaje, tipo)`.
-2. [UMD_ISOLATION]: En `public/index.html`, mantener siempre el bloque que guarda `window.module` en una variable temporal y asigna `module = undefined` antes de cargar `socket.io.min.js` y `peerjs.min.js`.
+2. [UMD_ISOLATION]: En `public/index.html`, mantener el bloque que guarda `window.module` y asigna `module = undefined` antes de cargar `socket.io.min.js` y `peerjs.min.js`. Con `nodeIntegration: false` ya no hace nada, pero protege si alguna vez se reactivara Node en la página.
 3. [SOCKET_RECONNECT_RESILIENCE]: Cualquier estado de suscripción en el servidor (como `unirseSala`) debe emitirse dentro de `socket.on('connect', ...)` para sobrevivir reconexiones automáticas de Socket.io.
 4. [VOICE_IS_GLOBAL]: El canal de voz (`unirse-voz-global`) es único y global para todo el servidor (independiente de la sala de texto `#General`, `#Juegos` o `#Música` en la que esté el usuario), aunque el evento visual `hablando`/`silencio` se emite a la sala actual del usuario (`socket.broadcast.to(usuario.sala)`).
 5. [DOM_USER_ID_CONVENTION]: Los elementos de la lista de usuarios deben mantener el formato `id="user-${nombre}"` porque `activarHalo(nombre, encender)` en `audio_script.js` depende de ese selector exacto para encender el halo verde de voz.
@@ -267,6 +286,10 @@ B) SERVIDOR -> CLIENTE (`socket.on`):
 7. [MIC_PIPELINE]: Obtener SIEMPRE el micrófono con `obtenerMicrofono()` (nunca `getUserMedia` directo) para que pase por RNNoise, y liberarlo con su `detener()`. No activar `noiseSuppression` nativo junto con RNNoise (doble procesado); solo se usa como respaldo dentro de `obtenerMicrofono()`.
 8. [NO_FETCH_FILE_URLS]: La UI se sirve desde `file://`. Para leer recursos locales usar `XMLHttpRequest` (`cargarArchivo`) y registrar worklets desde URLs `Blob`; `fetch()` no admite `file://`.
 9. [VENDOR_RNNOISE]: No editar a mano `public/vendor/rnnoise/`. Tras actualizar `@sapphi-red/web-noise-suppressor`, ejecutar `npm run vendor:rnnoise`. Si la librería cambia el nombre del procesador, actualizar `RNNOISE_PROCESSOR_ID` en `audio_script.js`.
+10. [NO_INNERHTML_CON_DATOS]: NUNCA insertar datos de usuarios o del servidor (nombres, mensajes, IPs...) con `innerHTML` ni en atributos `on...`. Usar `textContent` / `crearElemento(etiqueta, clase, texto)` y `addEventListener`. `innerHTML` solo con texto fijo escrito en el código.
+11. [ELECTRON_HARDENING]: No volver a activar `nodeIntegration` ni desactivar `contextIsolation`/`sandbox`. Si la página necesita algo del sistema, añadir una función concreta en `preload.js` + un `ipcMain.handle` que valide sus argumentos y compruebe `esNuestraPagina(event)`.
+12. [SERVER_IS_AUTHORITY]: El servidor nunca se fía del cliente: valida tipo y longitud de todo lo que recibe, toma autor y sala de `usuariosConectados[socket.id]` y exige estar registrado para chat y voz. Cualquier evento nuevo debe seguir este patrón.
+13. [CSP]: `public/index.html` tiene una Content-Security-Policy en `<meta>`. Si se añade un recurso nuevo (script, wasm, worker, conexión), puede necesitar ampliar la directiva correspondiente; revisar la consola por errores "Refused to...".
 ===============================================================================
                           FIN DEL DOCUMENTO DE CONTEXTO IA
 ===============================================================================

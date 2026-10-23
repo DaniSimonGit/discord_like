@@ -478,12 +478,8 @@ function iniciarDetectorVoz(stream) {
 
 // Función auxiliar para iluminar mi propio avatar (ya que el socket no me lo devuelve a mí)
 function iluminarYo(encender) {
-    // Necesitamos saber mi nombre de usuario global. 
-    // Como está en el otro script, una forma sucia pero rápida es buscar el ID que contenga mi nombre
-    // O mejor: usar la variable 'usuario' si fuera accesible, pero aquí usaremos el DOM.
-    // Buscamos el item que NO sea de los demás (esto es un parche rápido, lo ideal es pasar el nombre a unirseVoz)
-    const miNombre = document.getElementById('input-usuario').value; // Truco: leemos el input del login (que está oculto pero tiene el valor)
-    activarHalo(miNombre, encender);
+    // 'usuario' es la variable global de index.html con el nombre con el que se entró
+    activarHalo(usuario, encender);
 }
 
 // Función para encender/apagar el CSS

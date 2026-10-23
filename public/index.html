@@ -4,6 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- SEGURIDAD: solo se ejecutan scripts propios (no de internet) y no se cargan plugins.
+         connect-src permite http:/ws: a cualquier IP porque la IP del Host es dinámica.
+         'wasm-unsafe-eval' y blob: son necesarios para el filtro de ruido RNNoise. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file: 'unsafe-inline' 'wasm-unsafe-eval' blob:; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data:; media-src 'self' blob: mediastream:; connect-src 'self' file: http: ws:; object-src 'none'; base-uri 'none'; form-action 'none'">
     <title>Mi Chat Local</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -24,6 +28,20 @@
         </div>
     </div>
 
+    <div id="host-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #202225; z-index: 9999; justify-content: center; align-items: center; flex-direction: column;">
+        <h2 style="color: white; margin-bottom: 20px;">Contraseña del Servidor</h2>
+        <p style="color: #b9bbbe; margin-bottom: 10px; max-width: 340px; text-align: center;">Elige una contraseña (mínimo 4 caracteres). Tus amigos la necesitarán para entrar.</p>
+        <input type="password" id="host-password-input" placeholder="Contraseña..." maxlength="64" autocomplete="new-password"
+            style="padding: 10px; width: 300px; margin-bottom: 20px; border-radius: 5px; border: none; outline: none;">
+        <div style="display: flex; gap: 10px;">
+            <button onclick="confirmarHost()"
+                style="padding: 10px 20px; background: #5865F2; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Crear Servidor</button>
+            <button onclick="borrarIP()"
+                style="padding: 10px 20px; background: #ed4245; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Cancelar</button>
+        </div>
+    </div>
+
     <div id="ip-modal"
         style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #202225; z-index: 9999; justify-content: center; align-items: center; flex-direction: column;">
         <h2 style="color: white; margin-bottom: 20px;">Configuración del Servidor</h2>
@@ -39,8 +57,9 @@
         <div class="login-box">
             <h2 style="color: #7289da; margin-bottom: 20px;">Bienvenido</h2>
             <form id="form-login">
-                <input type="text" id="input-usuario" placeholder="Nombre de usuario..." required autocomplete="off" autofocus>
-                
+                <input type="text" id="input-usuario" placeholder="Nombre de usuario..." required autocomplete="off" maxlength="24" autofocus>
+                <input type="password" id="input-password" placeholder="Contraseña del servidor..." required autocomplete="off" maxlength="64" style="margin-top: 10px;">
+
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button type="submit" style="flex: 1;">Entrar al Servidor</button>
                     <button type="button" onclick="borrarIP()" title="Volver al menú principal"
@@ -57,6 +76,7 @@
         <div id="host-ip-banner" style="display: none; padding: 6px 8px; background: #2f3136; border-bottom: 1px solid #202225; text-align: center; font-size: 11px; color: #b9bbbe; margin-bottom: 8px;">
             <div style="font-weight: bold; color: #3ba55c; margin-bottom: 2px;">👑 IP para conectar:</div>
             <div id="host-ip-list"></div>
+            <div style="margin-top: 4px;">🔒 Comparte también la contraseña</div>
         </div>
         <button class="btn-sala activa" onclick="cambiarSala('General')" title="General"><span class="hash">#</span><span class="nombre-sala">General</span></button>
         <button class="btn-sala" onclick="cambiarSala('Juegos')" title="Juegos"><span class="hash">#</span><span class="nombre-sala">Juegos</span></button>
@@ -91,7 +111,7 @@
             <div id="mensajes"></div>
             <div class="input-area">
                 <form id="form-mensaje">
-                    <input type="text" id="input-texto" placeholder="Enviar mensaje..." autocomplete="off" />
+                    <input type="text" id="input-texto" placeholder="Enviar mensaje..." autocomplete="off" maxlength="1000" />
                 </form>
             </div>
         </div>
@@ -144,34 +164,36 @@
     </script>
 
     <script>
-        // Importamos el puente de comunicación de Electron de forma segura
-        let ipcRenderer = null;
-        if (typeof require !== 'undefined') {
-            try {
-                const electron = require('electron');
-                ipcRenderer = electron.ipcRenderer;
-            } catch (e) {
-                console.warn("Electron require no disponible en el navegador web.");
-            }
-        }
+        // Puente seguro con Electron (definido en preload.js). En un navegador normal no existe.
+        const apiElectron = window.electronAPI || null;
 
         // GESTIÓN DE IP DINÁMICA Y ROLES
         let serverIP = localStorage.getItem('chatServerIP');
         let socket;
 
         const roleModal = document.getElementById('role-modal');
+        const hostModal = document.getElementById('host-modal');
+        const hostPasswordInput = document.getElementById('host-password-input');
         const ipModal = document.getElementById('ip-modal');
         const ipInput = document.getElementById('ip-input');
         const loginScreen = document.getElementById('login-screen');
         const formLogin = document.getElementById('form-login');
         const inputUsuario = document.getElementById('input-usuario');
+        const inputPassword = document.getElementById('input-password');
 
         function ocultarTodosLosModales() {
             roleModal.style.display = 'none';
+            hostModal.style.display = 'none';
             ipModal.style.display = 'none';
             loginScreen.style.display = 'none';
             const settingsModal = document.getElementById('settings-modal');
             if (settingsModal) settingsModal.style.display = 'none';
+        }
+
+        function mostrarModalHost() {
+            ocultarTodosLosModales();
+            hostModal.style.display = 'flex';
+            setTimeout(() => hostPasswordInput.focus(), 100);
         }
 
         ocultarTodosLosModales();
@@ -186,25 +208,52 @@
             inputUsuario.disabled = false;
             setTimeout(() => inputUsuario.focus(), 100);
 
-            if (serverIP === 'localhost' && ipcRenderer) {
-                ipcRenderer.send('iniciar-host');
-                ipcRenderer.send('obtener-ips-host');
-                ipcRenderer.on('ips-host-obtenidas', (event, ips) => {
-                    const banner = document.getElementById('host-ip-banner');
-                    const listDiv = document.getElementById('host-ip-list');
-                    if (banner && listDiv && ips.length > 0) {
-                        banner.style.display = 'block';
-                        listDiv.innerHTML = ips.map(item => `
-                            <div style="margin: 3px 0; display: flex; align-items: center; justify-content: center; gap: 4px;">
-                                <span style="font-family: monospace; background: #202225; padding: 2px 4px; border-radius: 3px; color: #fff; font-size: 11px;">${item.ip}</span>
-                                <button onclick="navigator.clipboard.writeText('${item.ip}')" title="Copiar IP ${item.ip}" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 0;">📋</button>
-                            </div>
-                        `).join('');
-                    }
-                });
+            // Contraseña recordada: la del Host, o la última que funcionó en este servidor
+            const passwordGuardada = localStorage.getItem('chatServerPassword');
+            if (passwordGuardada) inputPassword.value = passwordGuardada;
+
+            if (serverIP === 'localhost' && apiElectron) {
+                if (!passwordGuardada) {
+                    // Host configurado sin contraseña (versión anterior de la app): hay que elegirla
+                    mostrarModalHost();
+                } else {
+                    apiElectron.iniciarHost(passwordGuardada).then(res => {
+                        if (!res.ok) {
+                            mostrarNotificacion(res.error);
+                            mostrarModalHost();
+                        }
+                    });
+                    apiElectron.obtenerIpsHost().then(mostrarIpsHost);
+                }
             }
-            socket = io(`http://${serverIP}:3000`, { autoConnect: false });
+            // La contraseña se envía en cada (re)conexión; el servidor rechaza el socket si no coincide
+            socket = io(`http://${serverIP}:3000`, {
+                autoConnect: false,
+                auth: (cb) => cb({ password: inputPassword.value })
+            });
             inicializarSocketEventos();
+        }
+
+        // Banner con las IPs del Host. Se construye con nodos DOM (nunca innerHTML con datos).
+        function mostrarIpsHost(ips) {
+            const banner = document.getElementById('host-ip-banner');
+            const listDiv = document.getElementById('host-ip-list');
+            if (!banner || !listDiv || !ips.length) return;
+            banner.style.display = 'block';
+            listDiv.replaceChildren(...ips.map(item => {
+                const fila = document.createElement('div');
+                fila.style.cssText = 'margin: 3px 0; display: flex; align-items: center; justify-content: center; gap: 4px;';
+                const ip = document.createElement('span');
+                ip.style.cssText = 'font-family: monospace; background: #202225; padding: 2px 4px; border-radius: 3px; color: #fff; font-size: 11px;';
+                ip.textContent = item.ip;
+                const copiar = document.createElement('button');
+                copiar.title = `Copiar IP ${item.ip}`;
+                copiar.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 12px; padding: 0;';
+                copiar.textContent = '📋';
+                copiar.addEventListener('click', () => navigator.clipboard.writeText(item.ip));
+                fila.append(ip, copiar);
+                return fila;
+            }));
         }
 
         // --- SISTEMA DE NOTIFICACIONES TOAST (Reemplazo de alert nativos) ---
@@ -221,15 +270,23 @@
 
         // --- FUNCIONES DE LOS MENÚS ---
         function elegirHost() {
-            if (!ipcRenderer) {
+            if (!apiElectron) {
                 mostrarNotificacion("La función Hostear solo está disponible en la app de escritorio (Electron).");
                 return;
             }
-            ipcRenderer.send('iniciar-host');
-            ipcRenderer.once('host-iniciado', () => {
-                localStorage.setItem('chatServerIP', 'localhost');
-                location.reload();
-            });
+            mostrarModalHost();
+        }
+
+        async function confirmarHost() {
+            const password = hostPasswordInput.value;
+            const res = await apiElectron.iniciarHost(password);
+            if (!res.ok) {
+                mostrarNotificacion(res.error);
+                return;
+            }
+            localStorage.setItem('chatServerIP', 'localhost');
+            localStorage.setItem('chatServerPassword', password);
+            location.reload();
         }
 
         function elegirJoin() {
@@ -243,6 +300,7 @@
             const ip = ipInput.value.trim();
             if (ip) {
                 localStorage.setItem('chatServerIP', ip);
+                localStorage.removeItem('chatServerPassword'); // Era de otro servidor
                 location.reload();
             }
         }
@@ -255,6 +313,7 @@
                 socket.disconnect();
             }
             localStorage.removeItem('chatServerIP');
+            localStorage.removeItem('chatServerPassword');
             location.reload();
         }
 
@@ -262,29 +321,31 @@
         let salaActual = 'General';
         let usuario = '';
 
+        // Vuelve a la pantalla de login (contraseña incorrecta, nombre en uso...)
+        function volverAlLogin() {
+            usuario = '';
+            ocultarTodosLosModales();
+            loginScreen.style.display = 'flex';
+            setTimeout(() => inputUsuario.focus(), 100);
+        }
+
         // Login
         formLogin.addEventListener('submit', (e) => {
             e.preventDefault();
-            console.log("🚀 [FORM-LOGIN SUBMITTED] valor del input:", inputUsuario.value);
             const nombre = inputUsuario.value.trim();
-            if (nombre) {
+            if (nombre && inputPassword.value) {
                 usuario = nombre;
-                console.log("✅ [LOGIN EXITO] Usuario guardado:", usuario, ". Ocultando modales.");
                 ocultarTodosLosModales();
-                document.getElementById('mensajes').innerHTML = '';
-                
+                document.getElementById('mensajes').replaceChildren();
+
                 if (socket && typeof socket.connect === 'function') {
                     if (!socket.connected) {
-                        console.log("🔌 [SOCKET] Conectando socket...");
                         socket.connect();
                     } else {
-                        console.log("🔌 [SOCKET] Socket ya conectado. Emitiendo unirseSala.");
                         socket.emit('unirseSala', { sala: salaActual, nombre: usuario });
                     }
                 }
                 setTimeout(() => document.getElementById('input-texto')?.focus(), 100);
-            } else {
-                console.warn("⚠️ [LOGIN FALLO] El nombre está vacío.");
             }
         });
 
@@ -308,7 +369,7 @@
             }
             salaActual = nuevaSala;
             document.getElementById('titulo-sala').innerText = nuevaSala;
-            document.getElementById('mensajes').innerHTML = '';
+            document.getElementById('mensajes').replaceChildren();
             if (usuario && socket && typeof socket.emit === 'function') {
                 socket.emit('unirseSala', { sala: nuevaSala, nombre: usuario });
             }
@@ -320,23 +381,30 @@
 
         formMensaje.addEventListener('submit', (e) => {
             e.preventDefault();
-            if (inputTexto.value && usuario && socket && typeof socket.emit === 'function') {
-                socket.emit('mensajeChat', { sala: salaActual, usuario: usuario, texto: inputTexto.value });
+            if (inputTexto.value.trim() && usuario && socket && typeof socket.emit === 'function') {
+                socket.emit('mensajeChat', { texto: inputTexto.value });
                 inputTexto.value = '';
             }
         });
 
+        // Crea un elemento con texto plano. SEGURIDAD: textContent nunca interpreta HTML,
+        // así que un mensaje como <img onerror=...> se muestra tal cual, sin ejecutarse.
+        function crearElemento(etiqueta, clase, texto) {
+            const el = document.createElement(etiqueta);
+            el.className = clase;
+            if (texto !== undefined) el.textContent = texto;
+            return el;
+        }
+
         // Pintar Mensajes
         function pintarMensaje(msg) {
-            const div = document.createElement('div');
-            div.className = 'mensaje';
-            div.innerHTML = `
-                <div class="mensaje-header">
-                    <span class="autor">${msg.usuario}</span>
-                    <span class="hora">${msg.hora || 'Ahora'}</span>
-                </div>
-                <div class="texto">${msg.texto}</div>
-            `;
+            const div = crearElemento('div', 'mensaje');
+            const header = crearElemento('div', 'mensaje-header');
+            header.append(
+                crearElemento('span', 'autor', msg.usuario),
+                crearElemento('span', 'hora', msg.hora || 'Ahora')
+            );
+            div.append(header, crearElemento('div', 'texto', msg.texto));
             const contenedor = document.getElementById('mensajes');
             contenedor.appendChild(div);
             contenedor.scrollTop = contenedor.scrollHeight;
@@ -351,40 +419,53 @@
             socket.off('mensajeChat');
             socket.off('historialSala');
             socket.off('actualizarUsuarios');
+            socket.off('errorNombre');
+            socket.off('avisoServidor');
 
             socket.on('connect', () => {
                 console.log('✅ [SOCKET CONECTADO CON ÉXITO] ID:', socket.id);
+                // La contraseña ha funcionado: la recordamos para la próxima vez
+                localStorage.setItem('chatServerPassword', inputPassword.value);
                 if (usuario) {
                     socket.emit('unirseSala', { sala: salaActual, nombre: usuario });
                 }
             });
 
             socket.on('connect_error', (err) => {
-                console.error('❌ [SOCKET ERROR DE CONEXIÓN]:', err);
+                console.error('❌ [SOCKET ERROR DE CONEXIÓN]:', err.message);
+                if (!socket.active) {
+                    // El servidor ha rechazado la conexión (contraseña incorrecta o bloqueo)
+                    mostrarNotificacion(err.message);
+                    volverAlLogin();
+                }
             });
+
+            socket.on('errorNombre', (mensaje) => {
+                mostrarNotificacion(mensaje);
+                volverAlLogin();
+            });
+
+            socket.on('avisoServidor', (mensaje) => mostrarNotificacion(mensaje));
 
             socket.on('mensajeChat', (msg) => pintarMensaje(msg));
             socket.on('historialSala', (lista) => {
-                document.getElementById('mensajes').innerHTML = '';
+                document.getElementById('mensajes').replaceChildren();
                 lista.forEach(msg => pintarMensaje(msg));
             });
 
             socket.on('actualizarUsuarios', (listaNombres) => {
                 const contenedor = document.getElementById('lista-usuarios');
                 document.getElementById('contador-usuarios').innerText = listaNombres.length;
-                contenedor.innerHTML = '';
+                contenedor.replaceChildren();
                 listaNombres.forEach(nombre => {
-                    const item = document.createElement('div');
-                    item.className = 'usuario-item';
+                    const item = crearElemento('div', 'usuario-item');
                     item.id = `user-${nombre}`;
-                    const inicial = nombre.charAt(0).toUpperCase();
-                    item.innerHTML = `
-                        <div class="avatar-wrapper">
-                            <div class="avatar-circle">${inicial}</div>
-                            <div class="status-dot"></div>
-                        </div>
-                        <div class="nombre-usuario">${nombre}</div>
-                    `;
+                    const avatar = crearElemento('div', 'avatar-wrapper');
+                    avatar.append(
+                        crearElemento('div', 'avatar-circle', nombre.charAt(0).toUpperCase()),
+                        crearElemento('div', 'status-dot')
+                    );
+                    item.append(avatar, crearElemento('div', 'nombre-usuario', nombre));
                     contenedor.appendChild(item);
                 });
             });
